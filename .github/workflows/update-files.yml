@@ -68,9 +68,9 @@ jobs:
       - name: Update DockerHub description
         run: |
           python scripts/update-dockerhub-description.py \
-            --strategy '${{ steps.generate-jobs.outputs.strategy }}' \
-            --template dockerhub-description-template.md \
-            --output dockerhub-description.md
+            '${{ steps.generate-jobs.outputs.strategy }}' \
+            dockerhub-description-template.md \
+            dockerhub-description.md
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
