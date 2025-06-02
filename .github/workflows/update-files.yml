@@ -52,8 +52,19 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
+          # Download the scripts for bashbrew in local
+            jqt='.jq-template.awk'
+            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+            jqf='.template-helper-functions.jq'
+            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+
+          # Run update script
           chmod +x apply-templates.sh
           ./apply-templates.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Regenerate Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
 
       - name: Set up bashbrew
         uses: docker-library/bashbrew@v0.1.12
@@ -67,10 +78,12 @@ jobs:
 
       - name: Update DockerHub description
         run: |
+          echo '${{ steps.generate-jobs.outputs.strategy }}' > strategy.json
           python scripts/update-dockerhub-description.py \
-            '${{ steps.generate-jobs.outputs.strategy }}' \
-            dockerhub-description-template.md \
-            dockerhub-description.md
+            --strategy strategy.json \
+            --template dockerhub-description-template.md \
+            --output dockerhub-description.md
+          rm strategy.json
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
