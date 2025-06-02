@@ -61,8 +61,12 @@ def get_module_versions() -> dict:
             'search_version': 'unknown'
         }
 
-def update_docker_description(strategy_data: dict, template_file: str, output_file: str) -> None:
+def update_docker_description(json_file: str, template_file: str, output_file: str) -> None:
     try:
+        # Read the strategy JSON file
+        with open(json_file, 'r') as f:
+            strategy_data = json.load(f)
+            
         with open(template_file, 'r') as f:
             template = f.read()
 
@@ -111,7 +115,7 @@ def update_docker_description(strategy_data: dict, template_file: str, output_fi
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         logging.error("Invalid number of arguments.")
-        logging.error("Usage: python automate-docker-description.py <json_file> <template_file> <output_file>")
+        logging.error("Usage: python update-dockerhub-description.py <json_file> <template_file> <output_file>")
         sys.exit(1)
 
     try:
