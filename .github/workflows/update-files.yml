@@ -46,7 +46,7 @@ jobs:
 
       - name: Update versions.json
         run: |
-          python scripts/update_versions.py versions.json \
+          python scripts/update-versions.py versions.json \
             "${{ steps.process-inputs.outputs.module }}" \
             "${{ steps.process-inputs.outputs.version }}"
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Update DockerHub description
         run: |
-          python scripts/update_dockerhub_description.py \
+          python scripts/update-dockerhub_description.py \
             --strategy '${{ steps.generate-jobs.outputs.strategy }}' \
             --template dockerhub-description-template.md \
             --output dockerhub-description.md
