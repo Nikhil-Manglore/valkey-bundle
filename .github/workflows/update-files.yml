@@ -67,7 +67,7 @@ jobs:
 
       - name: Update DockerHub description
         run: |
-          python scripts/update-dockerhub_description.py \
+          python scripts/update-dockerhub-description.py \
             --strategy '${{ steps.generate-jobs.outputs.strategy }}' \
             --template dockerhub-description-template.md \
             --output dockerhub-description.md
