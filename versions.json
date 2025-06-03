@@ -17,9 +17,9 @@
     }
   },
   "8.2": {
-    "version": "8.2.0-rc1",
+    "version": "8.2.0",
     "valkey-server": {
-      "version": "8.2.0-rc1"
+      "version": "8.2.0"
     },
     "modules": {
       "valkey-json": {
