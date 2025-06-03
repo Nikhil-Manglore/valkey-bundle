@@ -25,16 +25,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 
 
       - name: Process inputs
         id: process-inputs
         run: |
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            # From trigger
             echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.client_payload.module }}" >> $GITHUB_OUTPUT
           else
+            # Manual trigger
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
           fi
@@ -52,9 +52,13 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          wget -qO .jq-template.awk https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk
-          wget -qO .template-helper-functions.jq https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq
+          # Download the scripts for bashbrew in local
+            jqt='.jq-template.awk'
+            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+            jqf='.template-helper-functions.jq'
+            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
 
+          # Run update script
           chmod +x apply-templates.sh
           ./apply-templates.sh
           git config user.name "github-actions[bot]"
@@ -78,37 +82,12 @@ jobs:
           python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
           rm strategy.json
 
-      - name: Push changes to existing PR branch or create new one
-        id: pr-branch
-        run: |
-          git fetch origin
-          EXISTING_BRANCH=$(git branch -r | grep 'origin/update-' | head -n 1 | sed 's|origin/||' || true)
-
-          if [[ -n "$EXISTING_BRANCH" ]]; then
-            echo "Using existing branch: $EXISTING_BRANCH"
-            git checkout "$EXISTING_BRANCH"
-            git merge origin/main --strategy-option=theirs || true
-            git add .
-            git commit -m "Add ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes"
-            git push origin "$EXISTING_BRANCH"
-            echo "branch=$EXISTING_BRANCH" >> $GITHUB_OUTPUT
-            echo "create_pr=false" >> $GITHUB_OUTPUT
-          else
-            NEW_BRANCH="update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}"
-            echo "Creating new branch: $NEW_BRANCH"
-            git checkout -b "$NEW_BRANCH"
-            git push origin "$NEW_BRANCH"
-            echo "branch=$NEW_BRANCH" >> $GITHUB_OUTPUT
-            echo "create_pr=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Create Pull Request
-        if: steps.pr-branch.outputs.create_pr == 'true'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.pr-branch.outputs.branch }}
-          delete-branch: false
+          branch: update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}
+          delete-branch: true
           title: "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
           commit-message: |
             Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}
