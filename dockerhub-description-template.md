@@ -11,7 +11,6 @@ Last updated: {update_date}
 
 # Supported tags and respective `Dockerfile` links
 
-## Official releases
 {official_releases}{release_candidates_section}
 
 ## What is [Valkey Extensions](https://github.com/valkey-io/valkey-extensions)?
