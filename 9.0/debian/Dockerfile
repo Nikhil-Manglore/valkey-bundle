@@ -4,9 +4,9 @@
 # PLEASE DO NOT EDIT IT DIRECTLY.
 #
 
-FROM docker.io/valkey/valkey:8.1.0-bookworm AS build
+FROM docker.io/valkey/valkey:9.0.0-bookworm AS build
 
-ARG SERVER_VERSION=8.1.0
+ARG SERVER_VERSION=9.0.0
 
 RUN set -eux;   \
                 \
@@ -39,7 +39,7 @@ WORKDIR /opt
 RUN set -eux; \
     git clone --depth 1 --branch 1.1.0  https://github.com/valkey-io/valkey-json.git; \
     git clone --depth 1 --branch 1.1.0 https://github.com/valkey-io/valkey-bloom.git; \
-    git clone --depth 1 --branch 1.1.0 https://github.com/valkey-io/valkey-search.git;
+    git clone --depth 1 --branch 1.1.1 https://github.com/valkey-io/valkey-search.git;
 
 # Build JSON module
 WORKDIR /opt/valkey-json
@@ -58,7 +58,7 @@ WORKDIR /opt/valkey-search
 RUN set -eux;       \
     ./build.sh;
 
-FROM docker.io/valkey/valkey:8.1.0-bookworm
+FROM docker.io/valkey/valkey:9.0.0-bookworm
 
 RUN mkdir -p /usr/lib/valkey;
 
