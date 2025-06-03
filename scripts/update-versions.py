@@ -90,11 +90,6 @@ def update_versions(versions_data: Dict[str, Any], module: str, new_version: str
         
         if module_name in versions_data[current_major_minor]["modules"]:
             versions_data[current_major_minor]["modules"][module_name]["version"] = new_version
-            ext_version = versions_data[current_major_minor]["version"]
-            if '-rc' in ext_version:
-                ext_version = ext_version.split('-rc')[0]
-            major, minor, patch, _ = parse_version(ext_version)
-            versions_data[current_major_minor]["version"] = f"{major}.{minor}.{patch + 1}"
         else:
             logging.error(f"Unknown module: {module}")
             return versions_data
