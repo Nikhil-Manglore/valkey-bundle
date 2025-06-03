@@ -41,6 +41,7 @@ RUN set -eux; \
     git clone --depth 1 --branch 1.1.0 https://github.com/valkey-io/valkey-bloom.git; \
     git clone --depth 1 --branch 1.1.1 https://github.com/valkey-io/valkey-search.git;
 
+
 # Build JSON module
 WORKDIR /opt/valkey-json
 RUN set -eux; \
