@@ -80,8 +80,15 @@ def update_docker_description(json_file: str, template_file: str, output_file: s
             else:
                 official_releases.append(line)
 
-        official_releases_section = "\n".join(official_releases)
-        rc_section = "" if not release_candidates else f"\n## Release candidates\n{'\n'.join(release_candidates)}"
+        if official_releases:
+            official_releases_section = "\n## Official releases\n" + "\n".join(official_releases)
+        else:
+            official_releases_section = ""
+
+        if release_candidates:
+            rc_section = "\n## Release candidates\n" + "\n".join(release_candidates)
+        else:
+            rc_section = ""
 
         # Get module versions
         versions = get_module_versions()
