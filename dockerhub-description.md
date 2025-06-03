@@ -13,6 +13,8 @@ Last updated: 2025-06-03
 
 
 ## Release candidates
+- [`8.2.0-rc1`, `8.2`, `8.2.0-rc1-bookworm`, `8.2-bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.2/debian/Dockerfile)
+- [`8.2.0-rc1-alpine`, `8.2-alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.2/alpine/Dockerfile)
 - [`8.1.0-rc1`, `8.1`, `8`, `latest`, `8.1.0-rc1-bookworm`, `8.1-bookworm`, `8-bookworm`, `bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.1/debian/Dockerfile)
 - [`8.1.0-rc1-alpine`, `8.1-alpine`, `8-alpine`, `alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.1/alpine/Dockerfile)
 
@@ -26,7 +28,7 @@ This image is built on top of the official Valkey base image and simplifies depl
 
 | valkey-extensions | valkey-json | valkey-bloom | valkey-search |
 |-------------------------|-------------|--------------|---------------|
-| [8.1.0-rc1](https://github.com/valkey-io/valkey-extensions/releases/tag/8.1.0-rc1) | [1.1.0](https://github.com/valkey-io/valkey-json/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-bloom/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-search/releases/tag/1.1.0) |
+| [8.2.0-rc1](https://github.com/valkey-io/valkey-extensions/releases/tag/8.2.0-rc1) | [1.1.0](https://github.com/valkey-io/valkey-json/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-bloom/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-search/releases/tag/1.1.0) |
 
 # Security
 
