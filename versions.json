@@ -32,5 +32,22 @@
         "version": "1.1.1"
       }
     }
+  },
+  "9.0": {
+    "version": "9.0.0-rc1",
+    "valkey-server": {
+      "version": "9.0.0-rc1"
+    },
+    "modules": {
+      "valkey-json": {
+        "version": "1.2.0"
+      },
+      "valkey-bloom": {
+        "version": "1.1.0"
+      },
+      "valkey-search": {
+        "version": "1.1.1"
+      }
+    }
   }
 }
