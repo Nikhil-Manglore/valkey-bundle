@@ -28,7 +28,7 @@ This image is built on top of the official Valkey base image and simplifies depl
 
 | valkey-extensions | valkey-json | valkey-bloom | valkey-search |
 |-------------------------|-------------|--------------|---------------|
-| [8.2.0-rc1](https://github.com/valkey-io/valkey-extensions/releases/tag/8.2.0-rc1) | [1.1.0](https://github.com/valkey-io/valkey-json/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-bloom/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-search/releases/tag/1.1.0) |
+| [8.2.0-rc1](https://github.com/valkey-io/valkey-extensions/releases/tag/8.2.0-rc1) | [1.2.0-rc1](https://github.com/valkey-io/valkey-json/releases/tag/1.2.0-rc1)| [1.1.0](https://github.com/valkey-io/valkey-bloom/releases/tag/1.1.0)| [1.1.0](https://github.com/valkey-io/valkey-search/releases/tag/1.1.0) |
 
 # Security
 
