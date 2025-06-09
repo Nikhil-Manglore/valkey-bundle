@@ -27,13 +27,12 @@ def read_versions_file(filename: str = "versions.json") -> Dict[str, Any]:
         return json.load(f)
 
 def get_latest_major_minor(versions_data: Dict[str, Any]) -> str:
-    """Get the latest major.minor version (bottommost block)."""
+    """Get the latest major.minor version (bottom most block)."""
     return max(versions_data.keys(), key=lambda x: [int(i) for i in x.split('.')])
 
 def update_versions(versions_data: Dict[str, Any], module: str, new_version: str) -> Dict[str, Any]:
     """Update versions.json according to Valkey and module versioning strategy."""
     new_major_minor = get_major_minor(new_version)
-    is_rc = '-rc' in new_version
 
     if module == 'valkey':
         existing_entry = new_major_minor in versions_data
@@ -42,7 +41,6 @@ def update_versions(versions_data: Dict[str, Any], module: str, new_version: str
             # Patch or RC update
             versions_data[new_major_minor]["version"] = new_version
             versions_data[new_major_minor]["valkey-server"]["version"] = new_version
-            return versions_data
         else:
             # New minor/major version
             current_latest = get_latest_major_minor(versions_data)
@@ -58,7 +56,8 @@ def update_versions(versions_data: Dict[str, Any], module: str, new_version: str
                 }
             }
             versions_data[new_major_minor] = new_entry
-            return versions_data
+            
+        return versions_data
 
     else:
         # Handle module update
@@ -84,6 +83,12 @@ if __name__ == "__main__":
         versions_data = read_versions_file(json_file)
     except FileNotFoundError:
         logging.error(f"File not found: {json_file}")
+        sys.exit(1)
+
+    try:
+        parse_version(new_version)
+    except ValueError as e:
+        logging.error(str(e))
         sys.exit(1)
 
     updated = update_versions(versions_data, module, new_version)
