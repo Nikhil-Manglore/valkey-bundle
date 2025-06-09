@@ -29,7 +29,7 @@ jobs:
           echo "strategy=$(jq -c . <<<"$strategy")" >> "$GITHUB_OUTPUT"
           jq . <<<"$strategy" # debugging aid to visually inspect the generated matrix
 
-  # Job to build and push Docker images individually for each architecture/platform
+  # Job to build and test Docker images individually for each architecture/platform
   build_and_push:
     needs: generate-jobs
     strategy:
@@ -44,6 +44,9 @@ jobs:
     runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       # Replace "/" with "-" in platform name for valid artifact naming
       - name: Prepare platform name
         run: |
@@ -72,6 +75,177 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Build base image first for testing
+      - name: Build base image for testing
+        uses: docker/build-push-action@v6
+        with:
+          file: ./${{ matrix.version.meta.entries[0].directory }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: ${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
+          cache-from: type=gha
+
+      - name: Create test runner script
+        run: |
+          cat > test-runner.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Starting Valkey server with modules..."
+          valkey-server \
+            --loadmodule /usr/lib/valkey/libjson.so \
+            --loadmodule /usr/lib/valkey/libvalkey_bloom.so \
+            --loadmodule /usr/lib/valkey/libsearch.so \
+            --bind 127.0.0.1 \
+            --protected-mode no \
+            --daemonize yes \
+            --logfile /tmp/valkey.log \
+            --pidfile /tmp/valkey.pid
+          
+          # Wait for server to start
+          echo "Waiting for Valkey server..."
+          for i in {1..30}; do
+            if redis-cli ping > /dev/null 2>&1; then
+              echo "Valkey server is ready!"
+              break
+            fi
+            sleep 1
+          done
+          
+          if ! redis-cli ping > /dev/null 2>&1; then
+            echo "Failed to start Valkey server"
+            cat /tmp/valkey.log
+            exit 1
+          fi
+          
+          # Verify that the modules are loaded
+          echo "Checking loaded modules..."
+          MODULES=$(redis-cli MODULE LIST)
+          echo "Loaded modules: $MODULES"
+          
+          for module in json bloom search; do
+            if ! echo "$MODULES" | grep -qi "$module"; then
+              echo "ERROR: $module module was not loaded"
+              exit 1
+            fi
+          done
+          
+          echo "All modules loaded successfully!"
+          
+          # Run individual test suites
+          TEST_FAILED=0
+          
+          # Run Valkey core tests
+          echo "Running Valkey core tests..."
+          cd /tests/valkey
+          if ! ./runtest \
+            --host 127.0.0.1 \
+            --port 6379 \
+            --tags -needs:repl \
+            --tags -needs:debug \
+            --tags -needs:save \
+            --tags -cluster:skip \
+            --ignore-encoding \
+            --ignore-digest \
+            --timeout 300 \
+            --verbose; then
+            echo "ERROR: Valkey core tests failed"
+            TEST_FAILED=1
+          else
+            echo "Valkey Core tests passed"
+          fi
+          
+          # Run JSON module tests
+          echo "Running JSON module tests..."
+          cd /opt/valkey-json/build
+          if ! make -j test; then
+            echo "ERROR: Valkey-JSON module tests failed"
+            TEST_FAILED=1
+          else
+            echo "Valkey-JSON module tests passed"
+          fi
+          
+          # Run Bloom module tests  
+          echo "Running Bloom module tests..."
+          cd /opt/valkey-bloom
+          export VALKEY_HOST=127.0.0.1
+          export VALKEY_PORT=6379
+          if ! cargo test --release; then
+            echo "ERROR: Valkey-Bloom module tests failed"
+            TEST_FAILED=1
+          else
+            echo "Valkey-Bloom module tests passed"
+          fi
+          
+          # Run Search module tests
+          echo "Running Search module tests..."
+          cd /opt/valkey-search 
+          if ! ./build.sh --run-tests; then
+            echo "ERROR: Valkey-Search module tests failed"
+            TEST_FAILED=1
+          else
+            echo "Valkey-Search module tests passed"
+          fi
+          
+          # Cleanup
+          if [ -f /tmp/valkey.pid ]; then
+            kill $(cat /tmp/valkey.pid) || true
+          fi
+          
+          if [ $TEST_FAILED -eq 0 ]; then
+            echo "All tests completed successfully!"
+            exit 0
+          else
+            echo "Some tests failed!"
+            exit 1
+          fi
+          EOF
+
+      - name: Create test Dockerfile
+        run: |
+          cat > Dockerfile.test << 'EOF'
+          FROM ${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
+          
+          # Install additional test dependencies
+          RUN apt-get update && apt-get install -y \
+              tcl tcl-dev python3 python3-pip redis-tools \
+              && rm -rf /var/lib/apt/lists/*
+          
+          # Install Python dependencies for tests
+          RUN pip3 install redis pytest hiredis
+          
+          # Clone Valkey core for core tests only (modules already exist in /opt/)
+          RUN git clone https://github.com/valkey-io/valkey.git /tests/valkey
+          
+          # Copy test runner script
+          COPY test-runner.sh /tests/
+          RUN chmod +x /tests/test-runner.sh
+          
+          WORKDIR /tests
+          EOF
+
+      - name: Build test image with dependencies
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.test
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: ${{ env.DOCKER_REPO_NAME }}:test-full-${{ matrix.version.name }}
+          cache-from: type=gha
+
+      # Only run tests on amd64 to save CI time and resources
+      - name: Run test suites
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          echo "Running comprehensive test suites for ${{ matrix.version.name }}..."
+          docker run --rm \
+            --name valkey-test-${{ matrix.version.name }} \
+            ${{ env.DOCKER_REPO_NAME }}:test-full-${{ matrix.version.name }} \
+            /tests/test-runner.sh
+
       # Prepare Docker tags from version metadata, replacing repository name with ACCOUNT/DOCKER_REPOSITORY
       - name: Prepare Tags
         id: prep_tags
@@ -89,37 +263,32 @@ jobs:
           path: tags.txt
           overwrite: true
 
-      # Build Docker images and push them to Docker Hub by digest (sha256)
-      - name: Build and push by digest
+      # Build final production image only after tests pass
+      - name: Build final image by digest
         id: build
         uses: docker/build-push-action@v6
         with:
           file: ./${{ matrix.version.meta.entries[0].directory }}/Dockerfile
           platforms: ${{ matrix.platform }}
-          # Push is true only for push events
           push: ${{ env.IS_PULL != 'true' }}
           outputs: type=image,push-by-digest=true,name-canonical=true
           tags: ${{ env.DOCKER_REPO_NAME }}
           provenance: false
-          load: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Export digest to a file to reference it later in merging manifests
       - name: Export digest
         id: export-digest
         run: |
           mkdir -p ${{ runner.temp }}/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
-      
-          # Check if the version directory contains 'debian'
           if [[ "${{ matrix.version.meta.entries[0].directory }}" == *"debian"* ]]; then
             echo "linux_distro=bookworm" >> "$GITHUB_OUTPUT"
           else
             echo "linux_distro=alpine" >> "$GITHUB_OUTPUT"
           fi
-    
+
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +296,7 @@ jobs:
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
-
+    
   # Job to merge architecture-specific images into a single multi-arch manifest
   merge-manifest:
     runs-on: ubuntu-latest
