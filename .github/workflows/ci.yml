@@ -75,17 +75,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build base image (buildx context)
+      # Build base image
       - name: Build base image for testing
         id: build-base
         uses: docker/build-push-action@v6
         with:
           file: ./${{ matrix.version.meta.entries[0].directory }}/Dockerfile
-          platforms: ${{ matrix.platform }}
           push: false
-          tags: ${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
+          load: true
+          tags: test-base
           cache-from: type=gha
-          outputs: type=docker
 
       - name: Create test runner script
         run: |
@@ -232,13 +231,12 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.test
-          platforms: ${{ matrix.platform }}
           push: false
           load: true
-          tags: ${{ env.DOCKER_REPO_NAME }}:test-full-${{ matrix.version.name }}
+          tags: test-image-${{ matrix.version.name }}
           cache-from: type=gha
           build-args: |
-            BASE_IMAGE=${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
+            BASE_IMAGE=test-base
 
       # Only run tests on amd64 to save CI time and resources
       - name: Run test suites
@@ -247,7 +245,7 @@ jobs:
           echo "Running comprehensive test suites for ${{ matrix.version.name }}..."
           docker run --rm \
             --name valkey-test-${{ matrix.version.name }} \
-            ${{ env.DOCKER_REPO_NAME }}:test-full-${{ matrix.version.name }} \
+            test-image-${{ matrix.version.name }} \
             /tests/test-runner.sh
 
       # Prepare Docker tags from version metadata, replacing repository name with ACCOUNT/DOCKER_REPOSITORY
