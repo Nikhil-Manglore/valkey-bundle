@@ -205,7 +205,8 @@ jobs:
       - name: Create test Dockerfile
         run: |
           cat > Dockerfile.test << 'EOF'
-          FROM ${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
+          ARG BASE_IMAGE
+          FROM ${BASE_IMAGE}
           
           # Install additional test dependencies
           RUN apt-get update && apt-get install -y \
