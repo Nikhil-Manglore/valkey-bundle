@@ -75,16 +75,17 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Build base image first for testing
+      # Build base image (buildx context)
       - name: Build base image for testing
+        id: build-base
         uses: docker/build-push-action@v6
         with:
           file: ./${{ matrix.version.meta.entries[0].directory }}/Dockerfile
           platforms: ${{ matrix.platform }}
           push: false
-          load: true
           tags: ${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
           cache-from: type=gha
+          outputs: type=docker
 
       - name: Create test runner script
         run: |
