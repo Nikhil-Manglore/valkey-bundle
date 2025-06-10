@@ -235,6 +235,8 @@ jobs:
           load: true
           tags: ${{ env.DOCKER_REPO_NAME }}:test-full-${{ matrix.version.name }}
           cache-from: type=gha
+          build-args: |
+            BASE_IMAGE=${{ env.DOCKER_REPO_NAME }}:base-${{ matrix.version.name }}
 
       # Only run tests on amd64 to save CI time and resources
       - name: Run test suites
