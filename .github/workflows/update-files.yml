@@ -30,11 +30,9 @@ jobs:
         id: process-inputs
         run: |
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            # From trigger
             echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.client_payload.module }}" >> $GITHUB_OUTPUT
           else
-            # Manual trigger
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
           fi
@@ -45,7 +43,6 @@ jobs:
           VERSION="${{ steps.process-inputs.outputs.version }}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
-
           if [ "$MAJOR" -lt 8 ] || { [ "$MAJOR" -eq 8 ] && [ "$MINOR" -lt 1 ]; }; then
             echo "Valkey version must be >= 8.1. Current: $VERSION"
             exit 1
@@ -64,13 +61,11 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          # Download the scripts for bashbrew in local
-            jqt='.jq-template.awk'
-            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
-            jqf='.template-helper-functions.jq'
-            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+          jqt='.jq-template.awk'
+          jqf='.template-helper-functions.jq'
+          wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+          wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
 
-          # Run update script
           chmod +x apply-templates.sh
           ./apply-templates.sh
           git config user.name "github-actions[bot]"
@@ -98,15 +93,16 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}
-          delete-branch: true
-          title: "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
+          branch: valkey-extension-updates
+          delete-branch: false
+          title: "Valkey Extension Update"
           commit-message: |
-            Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}
+            Add update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}
           body: |
-            This PR was automatically generated in response to a new release of ${{ steps.process-inputs.outputs.module }} version ${{ steps.process-inputs.outputs.version }}.
-            
+            This PR is automatically updated with changes for:
+            - ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}
+
             Changes include:
-            - Updated versions.json for new ${{ steps.process-inputs.outputs.module }} version
+            - Updated versions.json
             - Regenerated Dockerfiles
             - Updated DockerHub description
