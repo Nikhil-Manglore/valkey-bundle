@@ -36,7 +36,7 @@ WORKDIR /opt
 
 # Clone repositories
 RUN set -eux; \
-    git clone --depth 1 --branch 1.0.0  https://github.com/valkey-io/valkey-json.git; \
+    git clone --depth 1 --branch 2.0.0  https://github.com/valkey-io/valkey-json.git; \
     git clone --depth 1 --branch 1.0.0 https://github.com/valkey-io/valkey-bloom.git; \
 # need to clone main on alpine until this commit is available in a release tag:
 # https://github.com/valkey-io/valkey-search/commit/eec38de7fb0423fb659b451b79a8e3420299e936
