@@ -35,7 +35,7 @@ jobs:
       - name: Find most recent open PR branch
         id: pr-branch
         run: |
-          branch=$(gh pr list --state open --sort created --json headRefName --jq '.[-1].headRefName')
+          branch=$(gh pr list --state open --json headRefName,createdAt --jq 'sort_by(.createdAt) | .[-1].headRefName')
           if [[ -n "$branch" ]]; then
             echo "Found latest open PR branch: $branch"
             echo "branch=$branch" >> $GITHUB_OUTPUT
