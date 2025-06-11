@@ -116,6 +116,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          base: mainline
           branch: version-updates
           delete-branch: true
           title: "Update Valkey Extensions versions"
