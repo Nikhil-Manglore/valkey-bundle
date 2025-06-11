@@ -26,34 +26,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
-        run: |
-          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && sudo apt update \
-          && sudo apt install gh -y
-
       - name: Check for existing PR
         id: check-pr
         run: |
-          PR_NUMBER=$(gh pr list --state open --base mainline --search "head:update-" --json number --jq '.[0].number')
-          if [ -n "$PR_NUMBER" ]; then
+          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?state=open&base=mainline&head=${{ github.repository_owner }}:version-updates" \
+            | jq '.[0].number')
+          if [ "$PR_NUMBER" != "null" ]; then
             echo "existing_pr=$PR_NUMBER" >> $GITHUB_OUTPUT
             echo "Existing PR found: $PR_NUMBER"
           else
             echo "No existing PR found"
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout existing PR
         if: steps.check-pr.outputs.existing_pr
         run: |
-          gh pr checkout ${{ steps.check-pr.outputs.existing_pr }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git fetch origin pull/${{ steps.check-pr.outputs.existing_pr }}/head:pr-branch
+          git checkout pr-branch
 
       - name: Process inputs
         id: process-inputs
@@ -127,7 +117,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}
+          branch: version-updates
           delete-branch: true
           title: "Update Valkey Extensions versions"
           commit-message: |
