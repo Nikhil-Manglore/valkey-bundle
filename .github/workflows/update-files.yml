@@ -127,7 +127,11 @@ jobs:
 
       - name: Push changes
         run: |
-          git push origin HEAD:${{ steps.branch-name.outputs.branch }} --force
+          if [ "$(git status --porcelain)" ]; then
+            git push origin HEAD:${{ steps.branch-name.outputs.branch }} --force
+          else
+            echo "No changes to push."
+          fi
 
       - name: Create Pull Request
         if: ${{ steps.find-pr.outputs.open_pr == 'false' }}
