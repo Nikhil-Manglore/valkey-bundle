@@ -18,6 +18,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: update-valkey-extensions
+  cancel-in-progress: false
+
 jobs:
   update-files:
     name: Update Files and Create PR
@@ -27,13 +31,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
-      - name: Find open PR branch (if any)
+
+      - name: Find most recent open PR branch
         id: pr-branch
         run: |
-          branch=$(gh pr list --state open --json headRefName --jq '.[0].headRefName')
+          branch=$(gh pr list --state open --sort created --json headRefName --jq '.[-1].headRefName')
           if [[ -n "$branch" ]]; then
-            echo "Found open PR branch: $branch"
+            echo "Found latest open PR branch: $branch"
             echo "branch=$branch" >> $GITHUB_OUTPUT
           else
             echo "No open PR branch found"
@@ -41,7 +45,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            
+
       - name: Checkout appropriate branch
         uses: actions/checkout@v4
         with:
@@ -51,11 +55,9 @@ jobs:
         id: process-inputs
         run: |
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            # From trigger
             echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.client_payload.module }}" >> $GITHUB_OUTPUT
           else
-            # Manual trigger
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
           fi
@@ -66,7 +68,6 @@ jobs:
           VERSION="${{ steps.process-inputs.outputs.version }}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
-
           if [ "$MAJOR" -lt 8 ] || { [ "$MAJOR" -eq 8 ] && [ "$MINOR" -lt 1 ]; }; then
             echo "Valkey version must be >= 8.1. Current: $VERSION"
             exit 1
@@ -85,13 +86,11 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          # Download the scripts for bashbrew in local
-            jqt='.jq-template.awk'
-            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
-            jqf='.template-helper-functions.jq'
-            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+          jqt='.jq-template.awk'
+          wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+          jqf='.template-helper-functions.jq'
+          wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
 
-          # Run update script
           chmod +x apply-templates.sh
           ./apply-templates.sh
           git config user.name "github-actions[bot]"
@@ -119,9 +118,9 @@ jobs:
         id: find-base
         run: |
           default_branch="mainline"
-          open_pr=$(gh pr list --state open --json headRefName --jq '.[0].headRefName')
+          open_pr=$(gh pr list --state open --sort created --json headRefName --jq '.[-1].headRefName')
           if [[ -n "$open_pr" ]]; then
-            echo "Using open PR as base: $open_pr"
+            echo "Using latest open PR as base: $open_pr"
             echo "base_branch=$open_pr" >> $GITHUB_OUTPUT
           else
             echo "Using default branch: $default_branch"
