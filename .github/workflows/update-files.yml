@@ -64,11 +64,11 @@ jobs:
             echo "branch=update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.branch-name.outputs.branch }}
-          fetch-depth: 0
+      - name: Create or switch to update branch
+        run: |
+          git fetch origin ${{ steps.branch-name.outputs.branch }} || true
+          git checkout -B ${{ steps.branch-name.outputs.branch }} origin/${{ steps.branch-name.outputs.branch }} || \
+            git checkout -b ${{ steps.branch-name.outputs.branch }}
 
       - name: Guard against unsupported Valkey versions
         if: ${{ steps.process-inputs.outputs.module == 'valkey' }}
