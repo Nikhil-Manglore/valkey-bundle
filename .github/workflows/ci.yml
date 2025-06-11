@@ -1,391 +1,219 @@
-name: GitHub CI
+name: Update Valkey Extensions
 
 on:
-  pull_request:
-  push:
+  repository_dispatch:
+    types: [valkey-release, json-release, bloom-release, search-release]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+      module:
+        description: 'Module to release'
+        required: true
+        type: choice
+        options: [valkey, json, bloom, search]
 
-env:
-  IS_PULL: ${{ github.event_name == 'pull_request' }}
-
-defaults:
-  run:
-    shell: 'bash -Eeuo pipefail -x {0}'
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-
-  generate-jobs:
-    name: Generate Jobs
+  update-files:
+    name: Update Files and Create PR
     runs-on: ubuntu-latest
-    outputs:
-      strategy: ${{ steps.generate-jobs.outputs.strategy }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker-library/bashbrew@v0.1.12
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - id: generate-jobs
+      - name: Process inputs
+        id: process-inputs
         run: |
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            # From trigger
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+            echo "module=${{ github.event.client_payload.module }}" >> $GITHUB_OUTPUT
+          else
+            # Manual trigger
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Guard against unsupported Valkey versions
+        if: ${{ steps.process-inputs.outputs.module == 'valkey' }}
+        run: |
+          VERSION="${{ steps.process-inputs.outputs.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+
+          if [ "$MAJOR" -lt 8 ] || { [ "$MAJOR" -eq 8 ] && [ "$MINOR" -lt 1 ]; }; then
+            echo "Valkey version must be >= 8.1. Current: $VERSION"
+            exit 1
+          fi
+
+      - name: Check for existing update PRs
+        id: check-prs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Look for open PRs with branch names starting with "update-"
+          EXISTING_PRS=$(gh pr list --state open --json number,title,headRefName --jq '.[] | select(.headRefName | startswith("update-")) | {number: .number, title: .title, branch: .headRefName}')
+          
+          if [ -n "$EXISTING_PRS" ]; then
+            # Get the most recent PR (first in list)
+            PR_NUMBER=$(echo "$EXISTING_PRS" | jq -r '.number' | head -n1)
+            PR_BRANCH=$(echo "$EXISTING_PRS" | jq -r '.branch' | head -n1)
+            PR_TITLE=$(echo "$EXISTING_PRS" | jq -r '.title' | head -n1)
+            
+            echo "existing_pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "existing_pr_branch=$PR_BRANCH" >> $GITHUB_OUTPUT
+            echo "existing_pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
+            echo "has_existing_pr=true" >> $GITHUB_OUTPUT
+            
+            echo "Found existing update PR #$PR_NUMBER: $PR_TITLE"
+            echo "Branch: $PR_BRANCH"
+            echo "Will update existing PR instead of creating new one"
+          else
+            echo "has_existing_pr=false" >> $GITHUB_OUTPUT
+            echo "No existing update PRs found"
+          fi
+
+      - name: Checkout existing PR branch or create new branch
+        id: checkout-branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [[ "${{ steps.check-prs.outputs.has_existing_pr }}" == "true" ]]; then
+            # Checkout existing PR branch
+            git fetch origin ${{ steps.check-prs.outputs.existing_pr_branch }}
+            git checkout ${{ steps.check-prs.outputs.existing_pr_branch }}
+            echo "Checked out existing PR branch: ${{ steps.check-prs.outputs.existing_pr_branch }}"
+          else
+            # Create new branch
+            BRANCH_NAME="update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}"
+            git checkout -b "$BRANCH_NAME"
+            echo "Created new branch: $BRANCH_NAME"
+            echo "new_branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Update versions.json
+        run: |
+          python scripts/update-versions.py versions.json \
+            "${{ steps.process-inputs.outputs.module }}" \
+            "${{ steps.process-inputs.outputs.version }}"
+
+      - name: Generate Dockerfiles
+        run: |
+          # Download the scripts for bashbrew in local
+            jqt='.jq-template.awk'
+            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+            jqf='.template-helper-functions.jq'
+            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+
+          # Run update script
+          chmod +x apply-templates.sh
+          ./apply-templates.sh
+
+      - name: Set up bashbrew
+        uses: docker-library/bashbrew@v0.1.12
+
+      - name: Generate Jobs Strategy
+        id: generate-jobs
+        run: |
+          BASHBREW_SCRIPTS=/home/runner/work/_actions/docker-library/bashbrew/v0.1.12/scripts
           strategy="$("$BASHBREW_SCRIPTS/github-actions/generate.sh")"
-          echo "strategy=$(jq -c . <<<"$strategy")" >> "$GITHUB_OUTPUT"
-          jq . <<<"$strategy" # debugging aid to visually inspect the generated matrix
+          echo "strategy=$strategy" >> $GITHUB_OUTPUT
 
-  # Single test job - tests one representative build to verify modules work
-  test:
-    name: Test Modules Integration
-    runs-on: ubuntu-latest
-    needs: generate-jobs
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Pick the first Debian variant for testing (most stable)
-      - name: Select test variant
-        id: test-variant
+      - name: Update DockerHub description
         run: |
-          strategy='${{ needs.generate-jobs.outputs.strategy }}'
-          # Find first debian variant
-          test_version=$(echo "$strategy" | jq -r '.matrix.include[] | select(.meta.entries[0].directory | contains("debian")) | .name' | head -1)
-          test_directory=$(echo "$strategy" | jq -r --arg name "$test_version" '.matrix.include[] | select(.name == $name) | .meta.entries[0].directory')
-          echo "test_version=$test_version" >> "$GITHUB_OUTPUT"
-          echo "test_directory=$test_directory" >> "$GITHUB_OUTPUT"
+          echo '${{ steps.generate-jobs.outputs.strategy }}' > strategy.json
+          python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
+          rm strategy.json
 
-      # Build production image for testing
-      - name: Build production image
-        uses: docker/build-push-action@v6
-        with:
-          file: ./${{ steps.test-variant.outputs.test_directory }}/Dockerfile
-          push: false
-          load: true
-          tags: valkey-production-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Run comprehensive tests in the production container
-      - name: Run comprehensive test suite
+      - name: Commit changes
+        id: commit-changes
         run: |
-          echo "Running comprehensive test suites for ${{ steps.test-variant.outputs.test_version }}..."
+          git add .
           
-          # Start container and run all tests
-          docker run --rm \
-            --name valkey-integration-test \
-            valkey-production-test \
-            bash -c '
-              set -e
-              
-              echo "=== Installing test dependencies ==="
-              apt-get update
-              apt-get install -y --no-install-recommends \
-                tcl tcl-dev python3 python3-pip \
-                build-essential cmake git curl clang ninja-build libssl-dev \
-                ca-certificates procps
-              
-              echo "=== Installing Rust for Bloom tests ==="
-              curl --proto=https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-              export PATH="/root/.cargo/bin:${PATH}"
-              
-              echo "=== Installing Python dependencies ==="
-              pip3 install --no-cache-dir valkey pytest hiredis
-              
-              echo "=== Cloning source repositories for tests ==="
-              cd /opt
-              git clone --depth 1 --branch v1.0.0 https://github.com/valkey-io/valkey-json.git
-              git clone --depth 1 --branch v1.0.0 https://github.com/valkey-io/valkey-bloom.git  
-              git clone --depth 1 --branch v1.0.0-rc1 https://github.com/valkey-io/valkey-search.git
-              git clone --depth 1 --branch 8.1.0 https://github.com/valkey-io/valkey.git /tests/valkey
-              
-              echo "=== Starting Valkey server with modules ==="
-              valkey-server \
-                --loadmodule /usr/lib/valkey/libjson.so \
-                --loadmodule /usr/lib/valkey/libvalkey_bloom.so \
-                --loadmodule /usr/lib/valkey/libsearch.so \
-                --bind 127.0.0.1 \
-                --protected-mode no \
-                --daemonize yes \
-                --logfile /tmp/valkey.log \
-                --pidfile /tmp/valkey.pid \
-                --port 6379
-              
-              echo "=== Waiting for Valkey server ==="
-              for i in {1..30}; do
-                if valkey-cli -p 6379 ping >/dev/null 2>&1; then
-                  echo "Valkey server is ready!"
-                  break
-                fi
-                sleep 1
-              done
-              
-              if ! valkey-cli -p 6379 ping >/dev/null 2>&1; then
-                echo "Failed to start Valkey server"
-                cat /tmp/valkey.log || true
-                exit 1
-              fi
-              
-              echo "=== Verifying modules are loaded ==="
-              MODULES=$(valkey-cli -p 6379 MODULE LIST)
-              echo "Loaded modules: $MODULES"
-              
-              for module in json bloom search; do
-                if ! echo "$MODULES" | grep -qi "$module"; then
-                  echo "ERROR: $module module was not loaded"
-                  valkey-cli -p 6379 MODULE LIST
-                  exit 1
-                fi
-              done
-              
-              echo "All modules loaded successfully!"
-              
-              echo "=== Running test suites ==="
-              TEST_FAILED=0
-              
-              # Basic smoke test for all modules
-              echo "Running basic smoke tests..."
-              valkey-cli -p 6379 JSON.SET test $ "{\"hello\":\"world\"}" || { echo "JSON module failed smoke test"; TEST_FAILED=1; }
-              valkey-cli -p 6379 BF.RESERVE test_bloom 0.01 1000 || { echo "Bloom module failed smoke test"; TEST_FAILED=1; }
-              valkey-cli -p 6379 FT.CREATE test_idx ON HASH SCHEMA title TEXT || { echo "Search module failed smoke test"; TEST_FAILED=1; }
-              
-              if [ $TEST_FAILED -eq 1 ]; then
-                echo "Smoke tests failed, skipping comprehensive tests"
-                exit 1
-              fi
-              
-              # Run JSON module tests
-              echo "Running JSON module tests..."
-              cd /opt/valkey-json
-              mkdir -p build && cd build
-              cmake .. -DVALKEY_VERSION=8.1.0
-              if ! make test; then
-                echo "WARNING: Valkey-JSON module tests had issues"
-                # Dont fail the build for JSON test issues in CI
-              else
-                echo "Valkey-JSON module tests passed"
-              fi
-              
-              # Run Bloom module tests  
-              echo "Running Bloom module tests..."
-              cd /opt/valkey-bloom
-              export VALKEY_HOST=127.0.0.1
-              export VALKEY_PORT=6379
-              if ! cargo test; then
-                echo "WARNING: Valkey-Bloom module tests had issues"
-                # Dont fail the build for Bloom test issues in CI
-              else
-                echo "Valkey-Bloom module tests passed"
-              fi
-              
-              # Run Search module tests
-              echo "Running Search module tests..."
-              cd /opt/valkey-search 
-              if ! ./build.sh --run-tests; then
-                echo "WARNING: Valkey-Search module tests had issues"
-                # Dont fail the build for Search test issues in CI
-              else
-                echo "Valkey-Search module tests passed"
-              fi
-              
-              echo "=== Cleanup ==="
-              if [ -f /tmp/valkey.pid ]; then
-                kill $(cat /tmp/valkey.pid) 2>/dev/null || true
-              fi
-              
-              echo "Core functionality tests completed successfully!"
-              echo "All modules are properly loaded and functional in the container."
-            '
-
-  # Job to build and push Docker images individually for each architecture/platform (only after tests pass)
-  build_and_push:
-    needs: [generate-jobs, test]
-    strategy:
-      fail-fast: false # continue other jobs even if one job fails
-      matrix:
-        version: ${{ fromJson(needs.generate-jobs.outputs.strategy).matrix.include }}
-        platform: [linux/amd64, linux/arm64]
-
-    name: Build and push - ${{ matrix.version.name }} - ${{ matrix.platform }}
-
-    # Dynamic runner selection based on architecture
-    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Prepare platform name
-        run: |
-          platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-
-      - name: Set DOCKER_REPO_NAME dynamically
-        run: |
-          if [[ "${{ env.IS_PULL }}" == "true" ]]; then
-            echo "DOCKER_REPO_NAME=${{ github.actor }}/valkey-extensions" >> $GITHUB_ENV
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
           else
-            echo "DOCKER_REPO_NAME=${{ secrets.DOCKERHUB_ACCOUNT }}/valkey-extensions" >> $GITHUB_ENV
-          fi
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        if: env.IS_PULL != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Prepare Docker tags from version metadata, replacing repository name with ACCOUNT/DOCKER_REPOSITORY
-      - name: Prepare Tags
-        id: prep_tags
-        run: |
-          original_tags="${{ toJson(matrix.version.meta.entries[0].tags) }}"
-          tags=$(echo $original_tags | sed "s|valkey-extensions|${{ env.DOCKER_REPO_NAME }}|g" \
-          | sed 's/\[ *//; s/ *\]//; s/ //g' | tr -d '\n')  
-          echo "modified_tags=$tags" >> "$GITHUB_OUTPUT"
-          echo "$tags" > tags.txt
-
-      - name: Upload Tags Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tags-${{ matrix.version.name }}
-          path: tags.txt
-          overwrite: true
-
-      # Build Docker images and push them to Docker Hub by digest (sha256)
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          file: ./${{ matrix.version.meta.entries[0].directory }}/Dockerfile
-          platforms: ${{ matrix.platform }}
-          # Push is true only for push events
-          push: ${{ env.IS_PULL != 'true' }}
-          outputs: type=image,push-by-digest=true,name-canonical=true
-          tags: ${{ env.DOCKER_REPO_NAME }}
-          provenance: false
-          load: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Export digest to a file to reference it later in merging manifests
-      - name: Export digest
-        id: export-digest
-        run: |
-          mkdir -p ${{ runner.temp }}/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-          # Check if the version directory contains 'debian'
-          if [[ "${{ matrix.version.meta.entries[0].directory }}" == *"debian"* ]]; then
-            echo "linux_distro=bookworm" >> "$GITHUB_OUTPUT"
-          else
-            echo "linux_distro=alpine" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ steps.export-digest.outputs.linux_distro }}-${{ env.PLATFORM_PAIR }}-${{ matrix.version.name }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  # Job to merge architecture-specific images into a single multi-arch manifest
-  merge-manifest:
-    runs-on: ubuntu-latest
-    needs: build_and_push
-    steps:
-      - name: Set DOCKER_REPO_NAME dynamically
-        run: |
-          if [[ "${{ env.IS_PULL }}" == "true" ]]; then
-            echo "DOCKER_REPO_NAME=${{ github.actor }}/valkey-extensions" >> $GITHUB_ENV
-          else
-            echo "DOCKER_REPO_NAME=${{ secrets.DOCKERHUB_ACCOUNT }}/valkey-extensions" >> $GITHUB_ENV
-          fi
-
-      - name: Download Bookworm Digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests/bookworm
-          pattern: digests-bookworm-*
-          merge-multiple: true
-
-      - name: Download Alpine Digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests/alpine
-          pattern: digests-alpine-*
-          merge-multiple: true
-
-      - name: Download Tags
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/tags
-          pattern: tags-*
-          merge-multiple: true
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        if: env.IS_PULL != 'true'
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # Use imagetools to combine the arch-specific digests into respective multi-arch manifest
-      - name: Create Multi-Arch Manifest and Push
-        working-directory: ${{ runner.temp }}/digests
-        run: |
-          bookworm_exists=$([ -n "$(sed 's/,/ /g' ${{ runner.temp }}/tags/*.txt | grep -v "alpine")" ] && echo "true" || echo "false")
-
-          # Check if bookworm_exists is true
-          if [[ $bookworm_exists == "true" ]]; then
-            # Prepare tags and digest references argument for BOOKWORM from downloaded tags artifact
-            TAGS_bookworm=$(sed 's/,/ /g' ${{ runner.temp }}/tags/*.txt | grep -v "alpine" | xargs -n1 echo "-t" | tr '\n' ' ')
-            DIGESTS_bookworm=$(printf '${{ env.DOCKER_REPO_NAME }}@sha256:%s ' ./bookworm/* | sed 's|./bookworm/||g')
-
-            # Create and push the multi-architecture manifest for BOOKWORM only for push events
-            if [[ "${{ env.IS_PULL }}" == "true" ]]; then
-              echo "Dry run: docker buildx imagetools create $TAGS_bookworm $DIGESTS_bookworm"
+            # Commit with updated message
+            if [[ "${{ steps.check-prs.outputs.has_existing_pr }}" == "true" ]]; then
+              git commit -m "Add ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }} to existing update"
             else
-              docker buildx imagetools create $TAGS_bookworm $DIGESTS_bookworm
+              git commit -m "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
+            fi
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push changes and update/create PR
+        if: steps.commit-changes.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ steps.check-prs.outputs.has_existing_pr }}" == "true" ]]; then
+            # Push to existing PR branch
+            git push origin ${{ steps.check-prs.outputs.existing_pr_branch }}
+            
+            # Update PR title and description
+            CURRENT_BODY=$(gh pr view ${{ steps.check-prs.outputs.existing_pr_number }} --json body --jq '.body')
+            CURRENT_TITLE="${{ steps.check-prs.outputs.existing_pr_title }}"
+            
+            # Create new consolidated title if not already consolidated
+            if [[ "$CURRENT_TITLE" != *"multiple"* ]]; then
+              NEW_TITLE="Update for multiple extensions"
+              gh pr edit ${{ steps.check-prs.outputs.existing_pr_number }} --title "$NEW_TITLE"
+            fi
+            
+            # Add new module update to the description
+            NEW_LINE="- Updated ${{ steps.process-inputs.outputs.module }} to version ${{ steps.process-inputs.outputs.version }}"
+            
+            # Check if this update is already mentioned to avoid duplicates
+            if ! echo "$CURRENT_BODY" | grep -q "${{ steps.process-inputs.outputs.module }}.*${{ steps.process-inputs.outputs.version }}"; then
+              # Extract the changes section and add the new line
+              if echo "$CURRENT_BODY" | grep -q "Changes include:"; then
+                # Add to existing changes list
+                UPDATED_BODY=$(echo "$CURRENT_BODY" | sed "/Changes include:/a\\
+$NEW_LINE")
+              else
+                # Add changes section if it doesn't exist
+                UPDATED_BODY="$CURRENT_BODY"$'\n\n'"Changes include:"$'\n'"$NEW_LINE"
+              fi
+              
+              gh pr edit ${{ steps.check-prs.outputs.existing_pr_number }} --body "$UPDATED_BODY"
+              echo "Updated existing PR #${{ steps.check-prs.outputs.existing_pr_number }} with ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
+            else
+              echo "PR already contains update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
             fi
           else
-            echo "No valid bookworm tags found, skipping bookworm manifest creation."
+            # Push new branch and create new PR
+            BRANCH_NAME="${{ steps.checkout-branch.outputs.new_branch_name }}"
+            git push origin "$BRANCH_NAME"
+            
+            gh pr create \
+              --title "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" \
+              --body "This PR was automatically generated in response to a new release of ${{ steps.process-inputs.outputs.module }} version ${{ steps.process-inputs.outputs.version }}.
+
+            Changes include:
+            - Updated versions.json for new ${{ steps.process-inputs.outputs.module }} version
+            - Regenerated Dockerfiles
+            - Updated DockerHub description" \
+              --head "$BRANCH_NAME" \
+              --base mainline
+              
+            echo "Created new PR for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
           fi
 
-          alpine_exists=$([ -n "$(sed 's/,/ /g' ${{ runner.temp }}/tags/*.txt | grep "alpine")" ] && echo "true" || echo "false")
-          
-          # Check if TAGS_alpine and DIGESTS_alpine are not empty
-          if [[ alpine_exists == "true" ]]; then
-            # Prepare tags and digest references argument for ALPINE from downloaded tags artifact
-            TAGS_alpine=$(sed 's/,/ /g' ${{ runner.temp }}/tags/*.txt | grep "alpine" | xargs -n1 echo "-t" | tr '\n' ' ')
-            DIGESTS_alpine=$(printf '${{ env.DOCKER_REPO_NAME }}@sha256:%s ' ./alpine/* | sed 's|./alpine/||g')
-
-            # Create and push the multi-architecture manifest for ALPINE only for push events
-            if [[ "${{ env.IS_PULL }}" == "true" ]]; then
-              echo "Dry run: docker buildx imagetools create $TAGS_alpine $DIGESTS_alpine"
-            else
-              docker buildx imagetools create $TAGS_alpine $DIGESTS_alpine
-            fi
-          else
-            echo "No valid alpine tags found, skipping alpine manifest creation."
-          fi
-
-  update-dockerhub-description:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/mainline'
-    needs: merge-manifest
-    name: Update DockerHub Description
-    uses: ./.github/workflows/update-dockerhub-docs.yml
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}
+      - name: Clean up temporary files
+        if: always()
+        run: |
+          rm -f .jq-template.awk .template-helper-functions.jq
