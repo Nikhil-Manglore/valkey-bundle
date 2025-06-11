@@ -118,7 +118,7 @@ jobs:
         id: find-base
         run: |
           default_branch="mainline"
-          open_pr=$(gh pr list --state open --sort created --json headRefName --jq '.[-1].headRefName')
+          open_pr=$(gh pr list --state open --json headRefName,createdAt --jq 'sort_by(.createdAt) | .[-1].headRefName')
           if [[ -n "$open_pr" ]]; then
             echo "Using latest open PR as base: $open_pr"
             echo "base_branch=$open_pr" >> $GITHUB_OUTPUT
