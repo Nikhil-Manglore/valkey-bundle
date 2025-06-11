@@ -41,34 +41,26 @@ jobs:
             echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check for existing update PR
+      - name: Find existing update PR
         id: find-pr
         run: |
-          prs=$(gh pr list --state open --json number,title,headRefName)
-          echo "$prs" | jq -r '.[] | select(.title | startswith("Update for ")) | .headRefName' > pr_branch.txt
-          if [ -s pr_branch.txt ]; then
+          prs=$(gh pr list --state open --json title,headRefName)
+          branch=$(echo "$prs" | jq -r '.[] | select(.title | test("^Update for ")) | .headRefName' | head -n1)
+          if [ -n "$branch" ]; then
             echo "open_pr=true" >> $GITHUB_OUTPUT
-            echo "branch=$(cat pr_branch.txt)" >> $GITHUB_OUTPUT
+            echo "branch=$branch" >> $GITHUB_OUTPUT
           else
             echo "open_pr=false" >> $GITHUB_OUTPUT
+            echo "branch=update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set working branch name
-        id: branch-name
+      - name: Checkout or create branch
         run: |
-          if [ "${{ steps.find-pr.outputs.open_pr }}" == "true" ]; then
-            echo "branch=${{ steps.find-pr.outputs.branch }}" >> $GITHUB_OUTPUT
-          else
-            echo "branch=update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create or switch to update branch
-        run: |
-          git fetch origin ${{ steps.branch-name.outputs.branch }} || true
-          git checkout -B ${{ steps.branch-name.outputs.branch }} origin/${{ steps.branch-name.outputs.branch }} || \
-            git checkout -b ${{ steps.branch-name.outputs.branch }}
+          git fetch origin ${{ steps.find-pr.outputs.branch }} || true
+          git checkout -B ${{ steps.find-pr.outputs.branch }} origin/${{ steps.find-pr.outputs.branch }} || \
+            git checkout -b ${{ steps.find-pr.outputs.branch }}
 
       - name: Guard against unsupported Valkey versions
         if: ${{ steps.process-inputs.outputs.module == 'valkey' }}
@@ -125,13 +117,13 @@ jobs:
           python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
           rm strategy.json
 
-      - name: Push changes
+      - name: Commit and push changes
         run: |
-          if [ "$(git status --porcelain)" ]; then
-            git push origin HEAD:${{ steps.branch-name.outputs.branch }} --force
-          else
-            echo "No changes to push."
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
+          git push origin HEAD:${{ steps.find-pr.outputs.branch }} --force
 
       - name: Create Pull Request
         if: ${{ steps.find-pr.outputs.open_pr == 'false' }}
@@ -139,7 +131,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           base: mainline
-          branch: ${{ steps.branch-name.outputs.branch }}
+          branch: ${{ steps.find-pr.outputs.branch }}
           delete-branch: false
           title: "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
           commit-message: |
