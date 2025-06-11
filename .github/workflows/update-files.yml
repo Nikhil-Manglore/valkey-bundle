@@ -23,6 +23,11 @@ jobs:
     name: Update Files and Create PR
     runs-on: ubuntu-latest
     steps:
+      - name: Shallow checkout to enable gh
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
       - name: Find open PR branch (if any)
         id: pr-branch
         run: |
@@ -36,7 +41,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+            
       - name: Checkout appropriate branch
         uses: actions/checkout@v4
         with:
