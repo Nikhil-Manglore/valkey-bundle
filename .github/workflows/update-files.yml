@@ -23,11 +23,6 @@ jobs:
     name: Update Files and Create PR
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Process inputs
         id: process-inputs
         run: |
@@ -55,6 +50,12 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.find-pr.outputs.branch }}
+          fetch-depth: 0
 
       - name: Checkout or create branch
         run: |
