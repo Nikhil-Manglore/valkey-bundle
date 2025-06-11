@@ -134,6 +134,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          base: mainline
           branch: ${{ steps.branch-name.outputs.branch }}
           delete-branch: false
           title: "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
