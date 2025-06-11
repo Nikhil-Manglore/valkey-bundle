@@ -23,16 +23,34 @@ jobs:
     name: Update Files and Create PR
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Find open PR branch (if any)
+        id: pr-branch
+        run: |
+          branch=$(gh pr list --state open --json headRefName --jq '.[0].headRefName')
+          if [[ -n "$branch" ]]; then
+            echo "Found open PR branch: $branch"
+            echo "branch=$branch" >> $GITHUB_OUTPUT
+          else
+            echo "No open PR branch found"
+            echo "branch=" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout appropriate branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-branch.outputs.branch || 'mainline' }}
 
       - name: Process inputs
         id: process-inputs
         run: |
           if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            # From trigger
             echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.client_payload.module }}" >> $GITHUB_OUTPUT
           else
+            # Manual trigger
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
             echo "module=${{ github.event.inputs.module }}" >> $GITHUB_OUTPUT
           fi
@@ -49,56 +67,6 @@ jobs:
             exit 1
           fi
 
-      - name: Check for existing update PRs
-        id: check-prs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          EXISTING_PRS=$(gh pr list --state open --json number,title,headRefName --jq '.[] | select(.headRefName | startswith("update-")) | {number: .number, title: .title, branch: .headRefName}')
-          
-          if [ -n "$EXISTING_PRS" ]; then
-            PR_NUMBER=$(echo "$EXISTING_PRS" | jq -r '.number' | head -n1)
-            PR_BRANCH=$(echo "$EXISTING_PRS" | jq -r '.branch' | head -n1)
-            PR_TITLE=$(echo "$EXISTING_PRS" | jq -r '.title' | head -n1)
-            
-            echo "existing_pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-            echo "existing_pr_branch=$PR_BRANCH" >> $GITHUB_OUTPUT
-            echo "existing_pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
-            echo "has_existing_pr=true" >> $GITHUB_OUTPUT
-            
-            echo "Found existing update PR #$PR_NUMBER: $PR_TITLE"
-            echo "Will update existing PR instead of creating new one"
-          else
-            echo "has_existing_pr=false" >> $GITHUB_OUTPUT
-            echo "No existing update PRs found"
-          fi
-
-      - name: Wait to avoid race conditions
-        if: steps.check-prs.outputs.has_existing_pr == 'true'
-        run: |
-          echo "Waiting 30 seconds to avoid race conditions..."
-          sleep 30
-
-      - name: Setup branch strategy
-        id: setup-branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          if [[ "${{ steps.check-prs.outputs.has_existing_pr }}" == "true" ]]; then
-            echo "Fetching existing PR branch..."
-            git fetch origin ${{ steps.check-prs.outputs.existing_pr_branch }}
-            git checkout ${{ steps.check-prs.outputs.existing_pr_branch }}
-            git pull origin ${{ steps.check-prs.outputs.existing_pr_branch }}
-            
-            echo "branch_name=${{ steps.check-prs.outputs.existing_pr_branch }}" >> $GITHUB_OUTPUT
-            echo "is_existing_pr=true" >> $GITHUB_OUTPUT
-          else
-            BRANCH_NAME="update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}"
-            echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-            echo "is_existing_pr=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -112,13 +80,19 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          jqt='.jq-template.awk'
-          wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
-          jqf='.template-helper-functions.jq'
-          wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+          # Download the scripts for bashbrew in local
+            jqt='.jq-template.awk'
+            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+            jqf='.template-helper-functions.jq'
+            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
 
+          # Run update script
           chmod +x apply-templates.sh
           ./apply-templates.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Regenerate Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
 
       - name: Set up bashbrew
         uses: docker-library/bashbrew@v0.1.12
@@ -136,33 +110,35 @@ jobs:
           python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
           rm strategy.json
 
-      - name: Commit and push for existing PR
-        if: steps.setup-branch.outputs.is_existing_pr == 'true'
+      - name: Determine base branch
+        id: find-base
         run: |
-          git add .
-          if ! git diff --staged --quiet; then
-            git commit -m "Add ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }} to existing update"
-            git push origin ${{ steps.setup-branch.outputs.branch_name }}
+          default_branch="mainline"
+          open_pr=$(gh pr list --state open --json headRefName --jq '.[0].headRefName')
+          if [[ -n "$open_pr" ]]; then
+            echo "Using open PR as base: $open_pr"
+            echo "base_branch=$open_pr" >> $GITHUB_OUTPUT
+          else
+            echo "Using default branch: $default_branch"
+            echo "base_branch=$default_branch" >> $GITHUB_OUTPUT
           fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create new PR
-        if: steps.setup-branch.outputs.is_existing_pr == 'false'
+      - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.setup-branch.outputs.branch_name }}
-          base: mainline
+          branch: update-${{ steps.process-inputs.outputs.module }}-${{ steps.process-inputs.outputs.version }}
+          base: ${{ steps.find-base.outputs.base_branch }}
           delete-branch: true
           title: "Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
+          commit-message: |
+            Update for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}
           body: |
-            This PR was automatically generated with version updates.
-            
-            Latest changes:
-            - Updated ${{ steps.process-inputs.outputs.module }} to version ${{ steps.process-inputs.outputs.version }}
+            This PR was automatically generated in response to a new release of ${{ steps.process-inputs.outputs.module }} version ${{ steps.process-inputs.outputs.version }}.
+
+            Changes include:
+            - Updated versions.json for new ${{ steps.process-inputs.outputs.module }} version
             - Regenerated Dockerfiles
             - Updated DockerHub description
-
-      - name: Clean up temporary files
-        if: always()
-        run: |
-          rm -f .jq-template.awk .template-helper-functions.jq
