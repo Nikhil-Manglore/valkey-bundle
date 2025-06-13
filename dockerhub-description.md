@@ -13,13 +13,13 @@ Last updated: 2025-06-13
 
 
 ## Official releases
+- [`10.0.0`, `10.0`, `10.0.0-bookworm`, `10.0-bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/10.0/debian/Dockerfile)
+- [`10.0.0-alpine`, `10.0-alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/10.0/alpine/Dockerfile)
 - [`9.1.0`, `9.1`, `9.1.0-bookworm`, `9.1-bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/9.1/debian/Dockerfile)
 - [`9.1.0-alpine`, `9.1-alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/9.1/alpine/Dockerfile)
 - [`9.0.0`, `9.0`, `9.0.0-bookworm`, `9.0-bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/9.0/debian/Dockerfile)
 - [`9.0.0-alpine`, `9.0-alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/9.0/alpine/Dockerfile)
 ## Release candidates
-- [`10.0.0-rc1`, `10.0`, `10.0.0-rc1-bookworm`, `10.0-bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/10.0/debian/Dockerfile)
-- [`10.0.0-rc1-alpine`, `10.0-alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/10.0/alpine/Dockerfile)
 - [`8.1.0-rc1`, `8.1`, `8`, `latest`, `8.1.0-rc1-bookworm`, `8.1-bookworm`, `8-bookworm`, `bookworm`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.1/debian/Dockerfile)
 - [`8.1.0-rc1-alpine`, `8.1-alpine`, `8-alpine`, `alpine`](https://github.com/valkey-io/valkey-extensions/blob/mainline/8.1/alpine/Dockerfile)
 
@@ -33,7 +33,8 @@ This image is built on top of the official Valkey base image and simplifies depl
 
 | valkey-extensions | valkey-json | valkey-bloom | valkey-search |
 |-------------------------|-------------|--------------|---------------|
-| [10.0.0-rc1](https://github.com/valkey-io/valkey-extensions/releases/tag/10.0.0-rc1) | [2.0.0](https://github.com/valkey-io/valkey-json/releases/tag/2.0.0)| [2.0.0](https://github.com/valkey-io/valkey-bloom/releases/tag/2.0.0)| [2.0.0-rc1](https://github.com/valkey-io/valkey-search/releases/tag/2.0.0-rc1) |
+| [10.0.0](https://github.com/valkey-io/valkey-extensions/releases/tag/10.0.0-rc1) | [2.0.0](https://github.com/valkey-io/valkey-json/releases/tag/2.0.0)| [2.0.0](https://github.com/valkey-io/valkey-bloom/releases/tag/2.0.0)| [2.0.0-rc1](https://github.com/valkey-io/valkey-search/releases/tag/2.0.0-rc1) |
+
 
 # Security
 
