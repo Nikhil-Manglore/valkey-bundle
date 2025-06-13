@@ -57,6 +57,8 @@ jobs:
           python-version: '3.x'
 
       - name: Update versions.json
+        env:
+          token: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python scripts/update-versions.py versions.json \
             "${{ steps.process-inputs.outputs.module }}" \
