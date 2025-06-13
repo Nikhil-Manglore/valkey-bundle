@@ -48,9 +48,9 @@ def update_versions(versions_data: Dict[str, Any], module: str, new_version: str
         else:
             # New major/minor version
             module_repositories = {
-                "valkey-json": "valkey-io/valkey-json",
-                "valkey-bloom": "valkey-io/valkey-bloom",
-                "valkey-search": "valkey-io/valkey-search"
+                "valkey-json": "Nikhil-Manglore/valkey-json",
+                "valkey-bloom": "Nikhil-Manglore/valkey-bloom",
+                "valkey-search": "Nikhil-Manglore/valkey-search"
             }
 
             module_versions = {}
