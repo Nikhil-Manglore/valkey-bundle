@@ -38,7 +38,7 @@ jobs:
             echo "Branch exists. Fetching and checking it out..."
             git fetch origin "$branch"
             git checkout "$branch"
-            git pull origin "$branch"
+            git reset --hard origin/"$branch"
           else
             echo "Branch does not exist. Creating new..."
             git checkout -b "$branch"
