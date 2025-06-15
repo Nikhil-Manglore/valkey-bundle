@@ -34,7 +34,7 @@ jobs:
           branch="release-automation"
           echo "branch=$branch" >> $GITHUB_OUTPUT
 
-          if git ls-remote --exit-code origin "$branch"; then
+          if git ls-remote --heads origin "$branch" | grep "$branch" >/dev/null; then
             echo "Branch exists. Fetching and checking it out..."
             git fetch origin "$branch"
             git checkout "$branch"
