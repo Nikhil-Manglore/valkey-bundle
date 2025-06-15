@@ -43,15 +43,12 @@ jobs:
             echo "branch-exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Switch to update branch
+      - name: Merge existing branch changes if needed
+        if: steps.check-branch.outputs.branch-exists == 'true'
         run: |
-          if [[ "${{ steps.check-branch.outputs.branch-exists }}" == "true" ]]; then
-            echo "Checking out existing branch: ${{ steps.check-branch.outputs.branch-name }}"
-            git checkout ${{ steps.check-branch.outputs.branch-name }}
-          else
-            echo "Creating new branch: ${{ steps.check-branch.outputs.branch-name }}"
-            git checkout -b ${{ steps.check-branch.outputs.branch-name }}
-          fi
+          # If the branch exists, merge its changes into main to build on top
+          git fetch origin ${{ steps.check-branch.outputs.branch-name }}
+          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit || echo "No merge needed"
 
       - name: Process inputs
         id: process-inputs
@@ -94,10 +91,10 @@ jobs:
       - name: Update Dockerfiles
         run: |
           # Download the scripts for bashbrew in local
-            jqt='.jq-template.awk'
-            wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
-            jqf='.template-helper-functions.jq'
-            wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+          jqt='.jq-template.awk'
+          wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
+          jqf='.template-helper-functions.jq'
+          wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
 
           # Run update script
           chmod +x apply-templates.sh
@@ -149,18 +146,17 @@ jobs:
             NEW_BODY="$EXISTING_BODY
 
             ## Latest Update - $TIMESTAMP
-            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
-                        
-                        echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
-                        echo "body<<EOF" >> $GITHUB_OUTPUT
-                        echo "$NEW_BODY" >> $GITHUB_OUTPUT
-                        echo "EOF" >> $GITHUB_OUTPUT
-                      else
-                        echo "pr-exists=false" >> $GITHUB_OUTPUT
-                        TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
-                        echo "title=Automated updates for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
-                        echo "body<<EOF" >> $GITHUB_OUTPUT
-                        echo "This PR contains automated updates for module releases.
+            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"           
+            echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "$NEW_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "pr-exists=false" >> $GITHUB_OUTPUT
+            TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            echo "title=Automated updates for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            echo "This PR contains automated updates for module releases.
 
             ## Updates - $TIMESTAMP  
             - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
