@@ -145,7 +145,22 @@ jobs:
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
             PR_NUMBER=$(echo "$PR_INFO" | jq -r '.[0].number')
             CURRENT_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
-            NEW_BODY="$CURRENT_BODY"$'\n'"$UPDATE_LINE"
+            if echo "$CURRENT_BODY" | grep -q "$UPDATE_LINE"; then
+              echo "Update line already present — skipping."
+              exit 0
+            fi
+
+            # Ensure insertion after '## Updates' but before 'Changes include:'
+            NEW_BODY=$(echo "$CURRENT_BODY" | awk -v line="$UPDATE_LINE" '
+              BEGIN { added=0 }
+              /^Changes include:/ && !added {
+                print ""
+                print line
+                print ""
+                added=1
+              }
+              { print }
+            ')
             gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
           else
             echo "No PR found to update."
@@ -157,8 +172,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
-          
-          # Push the commits
           git push origin $BRANCH_NAME
         
 
