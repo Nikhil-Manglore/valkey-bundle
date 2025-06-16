@@ -148,6 +148,18 @@ jobs:
             
             # Get all updates from commit history on this branch
             git fetch origin main
+            # Get all updates from commit history on this branch
+            git fetch origin main
+            echo "=== DEBUG: All commits on branch ==="
+            git log origin/main..$BRANCH_NAME --oneline
+            echo "=== DEBUG: Dockerfile commits ==="
+            git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for"
+            echo "=== DEBUG: After sed transformation ==="
+            COMMIT_UPDATES=$(git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for" | \
+              sed 's/^[a-f0-9]* Update Dockerfiles for /- Updated /' | \
+              sed 's/ to / to /')
+            echo "$COMMIT_UPDATES"
+            echo "=== END DEBUG ==="
             COMMIT_UPDATES=$(git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for" | \
               sed 's/^[a-f0-9]* Update Dockerfiles for /- Updated /' | \
               sed 's/ to / to /')
