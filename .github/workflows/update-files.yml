@@ -136,41 +136,41 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
-          
-          # Check if a pull request already exists
-          PR_INFO=$(gh pr list --base main --head $BRANCH_NAME --json number,title,body --limit 1)
-          
-          if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
-            CURRENT_DESCRIPTION=$(echo "$PR_INFO" | jq -r '.[0].body')
-            
-            echo "pr-exists=true" >> $GITHUB_OUTPUT
-            
-            # Create updated title
-            NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
-            
-            # Simple approach: Just append new update to existing description
-            NEW_LINE="- Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
-            NEW_DESCRIPTION="$CURRENT_DESCRIPTION"$'\n'"$NEW_LINE"
+          MODULE="${{ steps.process-inputs.outputs.module }}"
+          VERSION="${{ steps.process-inputs.outputs.version }}"
+          UPDATE_LINE="- Updated $MODULE to $VERSION"
 
-            echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
-            echo "body<<EOF" >> $GITHUB_OUTPUT
-            echo "$NEW_DESCRIPTION" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+          PR_INFO=$(gh pr list --base main --head "$BRANCH_NAME" --json number,title,body --limit 1)
+
+          if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
+            CURRENT_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
+
+            echo "pr-exists=true" >> $GITHUB_OUTPUT
+
+            # Append new update line
+            NEW_BODY="$CURRENT_BODY"$'\n'"$UPDATE_LINE"
+            NEW_TITLE="Automated updates (includes $MODULE $VERSION)"
           else
             echo "pr-exists=false" >> $GITHUB_OUTPUT
-            echo "title=Automated updates for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
-            echo "body<<EOF" >> $GITHUB_OUTPUT
-            echo "This PR contains automated updates for module releases.
 
-          ## Updates
-          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+            NEW_BODY="This PR contains automated updates for module releases.
 
-          Changes include:
-          - Updated versions.json
-          - Updated Dockerfiles  
-          - Updated DockerHub description" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            ## Updates
+            $UPDATE_LINE
+
+            Changes include:
+            - Updated versions.json
+            - Updated Dockerfiles
+            - Updated DockerHub description"
+            NEW_TITLE="Automated updates for $MODULE $VERSION"
           fi
+
+          # Escape for GitHub Actions multiline output
+          ESCAPED_BODY=$(printf '%s' "$NEW_BODY" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+          ESCAPED_TITLE=$(printf '%s' "$NEW_TITLE" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+
+          echo "title=$ESCAPED_TITLE" >> $GITHUB_OUTPUT
+          echo "body=$ESCAPED_BODY" >> $GITHUB_OUTPUT
       
       - name: Push changes and update existing PR
         if: steps.check-branch.outputs.branch-exists == 'true'
