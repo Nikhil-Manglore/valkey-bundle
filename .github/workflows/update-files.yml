@@ -149,8 +149,11 @@ jobs:
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
             # Extract existing updates from the body and add the new one
-            CURRENT_UPDATES=$(echo "$CURRENT_DESCRIPTION" | sed -n '/## Updates/,/Changes include:/p' | grep '^- Updated' || echo "")
-            
+            CURRENT_UPDATES=""
+            if echo "$CURRENT_DESCRIPTION" | grep -q "## Updates"; then
+              CURRENT_UPDATES=$(echo "$CURRENT_DESCRIPTION" | awk '/## Updates/,/Changes include:/' | grep '^- Updated' | head -20)
+            fi     
+                   
             # Create new updates section with all updates
             NEW_DESCRIPTION="This PR contains automated updates for module releases.
 
