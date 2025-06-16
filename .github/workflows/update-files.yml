@@ -22,6 +22,9 @@ jobs:
   update-files:
     name: Update Files and Create Pull Request
     runs-on: ubuntu-latest
+    concurrency:
+      group: valkey-bundle-updates
+      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,26 +36,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="valkey-extensions-update"
+          BRANCH_NAME="valkey-bundle-update"
           echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
           
-          if git ls-remote --exit-code --heads origin $BRANCH_NAME; then
-            echo "branch-exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "branch-exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup branch strategy
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          if [[ "${{ steps.check-branch.outputs.branch-exists }}" == "true" ]]; then
-            echo "Checking out existing branch..."
-            git fetch origin ${{ steps.check-branch.outputs.branch-name }}
-            git checkout ${{ steps.check-branch.outputs.branch-name }}
-            git pull origin ${{ steps.check-branch.outputs.branch-name }}
+          if git ls-remote --exit-code --heads origin $BRANCH_NAME; then
+            echo "branch-exists=true" >> $GITHUB_OUTPUT
+            echo "Checking out existing branch"
+            git fetch origin $BRANCH_NAME
+            git checkout $BRANCH_NAME
+            git pull origin $BRANCH_NAME
           else
+            echo "branch-exists=false" >> $GITHUB_OUTPUT
             echo "Staying on mainline for new branch creation"
           fi
 
@@ -107,10 +104,8 @@ jobs:
           ./apply-templates.sh
 
           # Commit the changes
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Update Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
+          git commit -m "Update versions.json and Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
 
       - name: Set up bashbrew
         uses: docker-library/bashbrew@v0.1.12
@@ -130,42 +125,6 @@ jobs:
           git add dockerhub-description.md
           git commit -m "Update DockerHub description for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
       
-      - name: Update PR body with new module/version
-        if: steps.check-branch.outputs.branch-exists == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCH_NAME="valkey-extensions-update"
-          MODULE="${{ steps.process-inputs.outputs.module }}"
-          VERSION="${{ steps.process-inputs.outputs.version }}"
-          UPDATE_LINE="- Updated $MODULE to $VERSION"
-
-          PR_INFO=$(gh pr list --base main --head "$BRANCH_NAME" --json number,body --limit 1)
-
-          if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
-            PR_NUMBER=$(echo "$PR_INFO" | jq -r '.[0].number')
-            CURRENT_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
-            if echo "$CURRENT_BODY" | grep -q "$UPDATE_LINE"; then
-              echo "Update line already present — skipping."
-              exit 0
-            fi
-
-            # Ensure insertion after '## Updates' but before 'Changes include:'
-            NEW_BODY=$(echo "$CURRENT_BODY" | awk -v line="$UPDATE_LINE" '
-              BEGIN { added=0 }
-              /^Changes include:/ && !added {
-                print ""
-                print line
-                print ""
-                added=1
-              }
-              { print }
-            ')
-            gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
-          else
-            echo "No PR found to update."
-          fi
-      
       - name: Push changes and update existing PR
         if: steps.check-branch.outputs.branch-exists == 'true'
         env:
@@ -174,7 +133,6 @@ jobs:
           BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
           git push origin $BRANCH_NAME
         
-
       - name: Create Pull Request
         if: steps.check-branch.outputs.branch-exists == 'false'
         uses: peter-evans/create-pull-request@v5
@@ -182,17 +140,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.check-branch.outputs.branch-name }}
           delete-branch: false
-          title: "Automated updates for module releases"
+          title: "Automated Updates for Valkey Bundle"
           body: |
-            This PR contains automated updates for valkey bundle releases.
-
-            ## Updates
-            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+            This PR contains automated updates for the valkey bundle releases.
             
-            See commit history for details of what was updated.
+            See commit history for details of the repositories and versions that were updated.
             
             Changes include:
             - Updated versions.json
             - Updated Dockerfiles  
             - Updated DockerHub description
-          commit-message: "Update ${{ steps.process-inputs.outputs.module }} to version ${{ steps.process-inputs.outputs.version }}"
