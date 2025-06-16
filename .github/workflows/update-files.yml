@@ -130,47 +130,26 @@ jobs:
           git add dockerhub-description.md
           git commit -m "Update DockerHub description for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
       
-      - name: Get existing pull request info
-        id: pr-info
+      - name: Update PR body with new module/version
+        if: steps.check-branch.outputs.branch-exists == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
+          BRANCH_NAME="valkey-extensions-update"
           MODULE="${{ steps.process-inputs.outputs.module }}"
           VERSION="${{ steps.process-inputs.outputs.version }}"
           UPDATE_LINE="- Updated $MODULE to $VERSION"
 
-          PR_INFO=$(gh pr list --base main --head "$BRANCH_NAME" --json number,title,body --limit 1)
+          PR_INFO=$(gh pr list --base main --head "$BRANCH_NAME" --json number,body --limit 1)
 
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
+            PR_NUMBER=$(echo "$PR_INFO" | jq -r '.[0].number')
             CURRENT_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
-
-            echo "pr-exists=true" >> $GITHUB_OUTPUT
-
-            # Append new update line
             NEW_BODY="$CURRENT_BODY"$'\n'"$UPDATE_LINE"
-            NEW_TITLE="Automated updates (includes $MODULE $VERSION)"
+            gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
           else
-            echo "pr-exists=false" >> $GITHUB_OUTPUT
-
-            NEW_BODY="This PR contains automated updates for module releases.
-
-            ## Updates
-            $UPDATE_LINE
-
-            Changes include:
-            - Updated versions.json
-            - Updated Dockerfiles
-            - Updated DockerHub description"
-            NEW_TITLE="Automated updates for $MODULE $VERSION"
+            echo "No PR found to update."
           fi
-
-          # Escape for GitHub Actions multiline output
-          ESCAPED_BODY=$(printf '%s' "$NEW_BODY" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
-          ESCAPED_TITLE=$(printf '%s' "$NEW_TITLE" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
-
-          echo "title=$ESCAPED_TITLE" >> $GITHUB_OUTPUT
-          echo "body=$ESCAPED_BODY" >> $GITHUB_OUTPUT
       
       - name: Push changes and update existing PR
         if: steps.check-branch.outputs.branch-exists == 'true'
@@ -190,12 +169,23 @@ jobs:
             --body "${{ steps.pr-info.outputs.body }}"
 
       - name: Create Pull Request
-        if: steps.check-branch.outputs.branch-exists == 'false'  # ← ADD THIS LINE
+        if: steps.check-branch.outputs.branch-exists == 'false'
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.check-branch.outputs.branch-name }}
           delete-branch: false
-          title: ${{ steps.pr-info.outputs.title }}
-          body: ${{ steps.pr-info.outputs.body }}
+          title: "Automated updates for module releases"
+          body: |
+            This PR contains automated updates for valkey bundle releases.
+
+            ## Updates
+            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+            
+            See commit history for details of what was updated.
+            
+            Changes include:
+            - Updated versions.json
+            - Updated Dockerfiles  
+            - Updated DockerHub description
           commit-message: "Update ${{ steps.process-inputs.outputs.module }} to version ${{ steps.process-inputs.outputs.version }}"
