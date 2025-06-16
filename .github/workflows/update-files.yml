@@ -42,15 +42,6 @@ jobs:
             echo "branch-exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Merge existing branch changes if needed
-        if: steps.check-branch.outputs.branch-exists == 'true'
-        run: |
-          # If the branch exists, merge its changes into main
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin ${{ steps.check-branch.outputs.branch-name }}
-          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit
-
       - name: Process inputs
         id: process-inputs
         run: |
