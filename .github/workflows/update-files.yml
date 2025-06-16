@@ -140,7 +140,7 @@ jobs:
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
             # Extract existing updates from the body and add the new one
-            EXISTING_UPDATES=$(echo "$EXISTING_BODY" | sed -n '/## Updates/,/## /p' | sed '/## Updates/d; /## [^U]/,$d' | grep '^- Updated' || echo "")
+            EXISTING_UPDATES=$(git log --oneline origin/main..HEAD | grep "Update.*for" | sed 's/^[a-f0-9]* Update.*for \([a-z]*\) \([0-9.]*\).*/- Updated \1 to \2/' | sort -u || echo "")
             
             # Create new updates section with all updates
             NEW_BODY="This PR contains automated updates for module releases.
