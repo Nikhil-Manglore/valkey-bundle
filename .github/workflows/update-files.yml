@@ -46,8 +46,10 @@ jobs:
         if: steps.check-branch.outputs.branch-exists == 'true'
         run: |
           # If the branch exists, merge its changes into main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin ${{ steps.check-branch.outputs.branch-name }}
-          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit || echo "No merge needed"
+          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit
 
       - name: Process inputs
         id: process-inputs
@@ -140,7 +142,7 @@ jobs:
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
             # Extract existing updates from the body and add the new one
-            EXISTING_UPDATES=$(git log --oneline origin/main..HEAD | grep "Update.*for" | sed 's/^[a-f0-9]* Update.*for \([a-z]*\) \([0-9.]*\).*/- Updated \1 to \2/' | sort -u || echo "")
+            EXISTING_UPDATES=$(echo "$EXISTING_BODY" | sed -n '/## Updates/,/## /p' | sed '/## Updates/d; /## [^U]/,$d' | grep '^- Updated' || echo "")
             
             # Create new updates section with all updates
             NEW_BODY="This PR contains automated updates for module releases.
