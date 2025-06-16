@@ -149,8 +149,8 @@ jobs:
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
             # Simple approach: Just append new update to existing description
-            NEW_DESCRIPTION="$CURRENT_DESCRIPTION
-          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
+            NEW_LINE="- Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
+            NEW_DESCRIPTION="$CURRENT_DESCRIPTION"$'\n'"$NEW_LINE"
 
             echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
