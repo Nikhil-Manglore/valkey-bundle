@@ -42,6 +42,20 @@ jobs:
             echo "branch-exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Setup branch strategy
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [[ "${{ steps.check-branch.outputs.branch-exists }}" == "true" ]]; then
+            echo "Checking out existing branch..."
+            git fetch origin ${{ steps.check-branch.outputs.branch-name }}
+            git checkout ${{ steps.check-branch.outputs.branch-name }}
+            git pull origin ${{ steps.check-branch.outputs.branch-name }}
+          else
+            echo "Staying on mainline for new branch creation"
+          fi
+
       - name: Process inputs
         id: process-inputs
         run: |
