@@ -129,7 +129,7 @@ jobs:
           rm strategy.json
           git add dockerhub-description.md
           git commit -m "Update DockerHub description for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
-
+      
       - name: Get existing pull request info
         id: pr-info
         env:
@@ -141,40 +141,16 @@ jobs:
           PR_INFO=$(gh pr list --base main --head $BRANCH_NAME --json number,title,body --limit 1)
           
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
+            CURRENT_DESCRIPTION=$(echo "$PR_INFO" | jq -r '.[0].body')
+            
             echo "pr-exists=true" >> $GITHUB_OUTPUT
             
             # Create updated title
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
-            # Get all updates from commit history on this branch
-            git fetch origin main
-            # Get all updates from commit history on this branch
-            git fetch origin main
-            echo "=== DEBUG: All commits on branch ==="
-            git log origin/main..$BRANCH_NAME --oneline
-            echo "=== DEBUG: Dockerfile commits ==="
-            git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for"
-            echo "=== DEBUG: After sed transformation ==="
-            COMMIT_UPDATES=$(git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for" | \
-              sed 's/^[a-f0-9]* Update Dockerfiles for /- Updated /' | \
-              sed 's/ to / to /')
-            echo "$COMMIT_UPDATES"
-            echo "=== END DEBUG ==="
-            COMMIT_UPDATES=$(git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for" | \
-              sed 's/^[a-f0-9]* Update Dockerfiles for /- Updated /' | \
-              sed 's/ to / to /')
-            
-            # Create new updates section with all updates from commits
-            NEW_DESCRIPTION="This PR contains automated updates for module releases.
-
-          ## Updates
-          $COMMIT_UPDATES
-          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
-
-          Changes include:
-          - Updated versions.json
-          - Updated Dockerfiles  
-          - Updated DockerHub description"
+            # Simple approach: Just append new update to existing description
+            NEW_DESCRIPTION="$CURRENT_DESCRIPTION
+          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
 
             echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
@@ -195,7 +171,7 @@ jobs:
           - Updated DockerHub description" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           fi
-
+      
       - name: Push changes and update existing PR
         if: steps.check-branch.outputs.branch-exists == 'true'
         env:
