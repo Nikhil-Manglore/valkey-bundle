@@ -160,13 +160,7 @@ jobs:
           
           # Push the commits
           git push origin $BRANCH_NAME
-          
-          # Get the PR number and update title/body
-          PR_NUMBER=$(gh pr list --base main --head $BRANCH_NAME --json number --jq '.[0].number')
-          
-          gh pr edit $PR_NUMBER \
-            --title "${{ steps.pr-info.outputs.title }}" \
-            --body "${{ steps.pr-info.outputs.body }}"
+        
 
       - name: Create Pull Request
         if: steps.check-branch.outputs.branch-exists == 'false'
