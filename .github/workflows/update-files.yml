@@ -182,6 +182,11 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
+      - name: Push changes to existing PR
+        if: steps.check-branch.outputs.branch-exists == 'true'
+        run: |
+          git push origin ${{ steps.check-branch.outputs.branch-name }}
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
