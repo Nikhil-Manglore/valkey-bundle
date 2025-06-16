@@ -188,6 +188,7 @@ jobs:
           git push origin ${{ steps.check-branch.outputs.branch-name }}
 
       - name: Create Pull Request
+        if: steps.check-branch.outputs.branch-exists == 'false'  # ← ADD THIS LINE
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
