@@ -4,9 +4,9 @@
 # PLEASE DO NOT EDIT IT DIRECTLY.
 #
 
-FROM docker.io/valkey/valkey:8.1.1-alpine AS build
+FROM docker.io/valkey/valkey:8.1.2-alpine AS build
 
-ARG SERVER_VERSION=8.1.1
+ARG SERVER_VERSION=8.1.2
 
 RUN set -eux; \
     apk add --no-cache            \
@@ -60,7 +60,7 @@ WORKDIR /opt/valkey-search
 RUN set -eux; \
     ./build.sh
 
-FROM docker.io/valkey/valkey:8.1.1-alpine
+FROM docker.io/valkey/valkey:8.1.2-alpine
 
 RUN set -eux; \
     apk add --no-cache libstdc++; \
