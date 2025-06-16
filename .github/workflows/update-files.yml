@@ -141,30 +141,28 @@ jobs:
           PR_INFO=$(gh pr list --base main --head $BRANCH_NAME --json number,title,body --limit 1)
           
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
-            CURRENT_DESCRIPTION=$(echo "$PR_INFO" | jq -r '.[0].body')
-            
             echo "pr-exists=true" >> $GITHUB_OUTPUT
             
-            # Create updated title and body
+            # Create updated title
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
-            # Extract existing updates from the body and add the new one
-            CURRENT_UPDATES=""
-            if echo "$CURRENT_DESCRIPTION" | grep -q "## Updates"; then
-              CURRENT_UPDATES=$(echo "$CURRENT_DESCRIPTION" | awk '/## Updates/,/Changes include:/' | grep '^- Updated' | head -20)
-            fi     
-                   
-            # Create new updates section with all updates
+            # Get all updates from commit history on this branch
+            git fetch origin main
+            COMMIT_UPDATES=$(git log origin/main..$BRANCH_NAME --oneline --grep="Update Dockerfiles for" | \
+              sed 's/^[a-f0-9]* Update Dockerfiles for /- Updated /' | \
+              sed 's/ to / to /')
+            
+            # Create new updates section with all updates from commits
             NEW_DESCRIPTION="This PR contains automated updates for module releases.
 
-            ## Updates
-            $CURRENT_UPDATES
-            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+          ## Updates
+          $COMMIT_UPDATES
+          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
 
-            Changes include:
-            - Updated versions.json
-            - Updated Dockerfiles  
-            - Updated DockerHub description"
+          Changes include:
+          - Updated versions.json
+          - Updated Dockerfiles  
+          - Updated DockerHub description"
 
             echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
@@ -175,15 +173,14 @@ jobs:
             echo "title=Automated updates for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
             echo "This PR contains automated updates for module releases.
-            
-            ## Updates
-            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
 
-            Changes include:
-            - Updated versions.json
-            - Updated Dockerfiles  
-            - Updated DockerHub description
-            " >> $GITHUB_OUTPUT
+          ## Updates
+          - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+
+          Changes include:
+          - Updated versions.json
+          - Updated Dockerfiles  
+          - Updated DockerHub description" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
