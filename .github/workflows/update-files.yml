@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for existing pull request branch
+      - name: Check for an existing pull request branch
         id: check-branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -139,7 +139,7 @@ jobs:
           PR_INFO=$(gh pr list --base main --head $BRANCH_NAME --json number,title,body --limit 1)
           
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
-            EXISTING_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
+            CURRENT_DESCRIPTION=$(echo "$PR_INFO" | jq -r '.[0].body')
             
             echo "pr-exists=true" >> $GITHUB_OUTPUT
             
@@ -147,7 +147,7 @@ jobs:
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
             # Extract existing updates from the body and add the new one
-            EXISTING_UPDATES=$(echo "$EXISTING_BODY" | sed -n '/## Updates/,/Changes include:/p' | grep '^- Updated' || echo "")
+            EXISTING_UPDATES=$(echo "$CURRENT_DESCRIPTION" | sed -n '/## Updates/,/Changes include:/p' | grep '^- Updated' || echo "")
             
             # Create new updates section with all updates
             NEW_BODY="This PR contains automated updates for module releases.
@@ -182,10 +182,22 @@ jobs:
             echo "EOF" >> $GITHUB_OUTPUT
           fi
 
-      - name: Push changes to existing PR
+      - name: Push changes and update existing PR
         if: steps.check-branch.outputs.branch-exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git push origin ${{ steps.check-branch.outputs.branch-name }}
+          BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
+          
+          # Push the commits
+          git push origin $BRANCH_NAME
+          
+          # Get the PR number and update title/body
+          PR_NUMBER=$(gh pr list --base main --head $BRANCH_NAME --json number --jq '.[0].number')
+          
+          gh pr edit $PR_NUMBER \
+            --title "${{ steps.pr-info.outputs.title }}" \
+            --body "${{ steps.pr-info.outputs.body }}"
 
       - name: Create Pull Request
         if: steps.check-branch.outputs.branch-exists == 'false'  # ← ADD THIS LINE
