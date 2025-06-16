@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   update-files:
-    name: Update Files and Create PR
+    name: Update Files and Create Pull Request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -28,15 +28,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for existing PR branch
+      - name: Check for existing pull request branch
         id: check-branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="automated-updates"
+          BRANCH_NAME="valkey-extensions-update"
           echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
           
-          # Check if the branch exists remotely
           if git ls-remote --exit-code --heads origin $BRANCH_NAME; then
             echo "branch-exists=true" >> $GITHUB_OUTPUT
           else
@@ -46,9 +45,11 @@ jobs:
       - name: Merge existing branch changes if needed
         if: steps.check-branch.outputs.branch-exists == 'true'
         run: |
-          # If the branch exists, merge its changes into main to build on top
+          # If the branch exists, merge its changes into main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin ${{ steps.check-branch.outputs.branch-name }}
-          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit || echo "No merge needed"
+          git merge origin/${{ steps.check-branch.outputs.branch-name }} --no-edit
 
       - name: Process inputs
         id: process-inputs
@@ -104,7 +105,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Update Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}"
+          git commit -m "Update Dockerfiles for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
 
       - name: Set up bashbrew
         uses: docker-library/bashbrew@v0.1.12
@@ -122,55 +123,59 @@ jobs:
           python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
           rm strategy.json
 
-      - name: Get existing PR info
+      - name: Get existing pull request info
         id: pr-info
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
           
-          # Check if PR already exists
+          # Check if a pull request already exists
           PR_INFO=$(gh pr list --base main --head $BRANCH_NAME --json number,title,body --limit 1)
           
           if echo "$PR_INFO" | jq -e '.[0]' > /dev/null; then
-            PR_NUMBER=$(echo "$PR_INFO" | jq -r '.[0].number')
-            EXISTING_TITLE=$(echo "$PR_INFO" | jq -r '.[0].title')
             EXISTING_BODY=$(echo "$PR_INFO" | jq -r '.[0].body')
             
             echo "pr-exists=true" >> $GITHUB_OUTPUT
-            echo "pr-number=$PR_NUMBER" >> $GITHUB_OUTPUT
             
             # Create updated title and body
             NEW_TITLE="Automated updates (includes ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }})"
             
-            # Add this update to the existing body
-            TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
-            NEW_BODY="$EXISTING_BODY
+            # Extract existing updates from the body and add the new one
+            EXISTING_UPDATES=$(echo "$EXISTING_BODY" | sed -n '/## Updates/,/## /p' | sed '/## Updates/d; /## [^U]/,$d' | grep '^- Updated' || echo "")
+            
+            # Create new updates section with all updates
+            NEW_BODY="This PR contains automated updates for module releases.
 
-            ## Latest Update - $TIMESTAMP
-            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"           
+            ## Updates
+            $EXISTING_UPDATES
+            - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
+
+            Changes include:
+            - Updated versions.json
+            - Updated Dockerfiles  
+            - Updated DockerHub description"
+
             echo "title=$NEW_TITLE" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
             echo "$NEW_BODY" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
             echo "pr-exists=false" >> $GITHUB_OUTPUT
-            TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
             echo "title=Automated updates for ${{ steps.process-inputs.outputs.module }} ${{ steps.process-inputs.outputs.version }}" >> $GITHUB_OUTPUT
             echo "body<<EOF" >> $GITHUB_OUTPUT
             echo "This PR contains automated updates for module releases.
-
-            ## Updates - $TIMESTAMP  
+            
+            ## Updates
             - Updated ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}
 
             Changes include:
             - Updated versions.json
             - Updated Dockerfiles  
             - Updated DockerHub description
-
-            *This PR may be updated with additional module releases.*" >> $GITHUB_OUTPUT
-                        echo "EOF" >> $GITHUB_OUTPUT
-                      fi
+            " >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
@@ -180,4 +185,4 @@ jobs:
           delete-branch: false
           title: ${{ steps.pr-info.outputs.title }}
           body: ${{ steps.pr-info.outputs.body }}
-          commit-message: "Update ${{ steps.process-inputs.outputs.module }} to ${{ steps.process-inputs.outputs.version }}"
+          commit-message: "Update ${{ steps.process-inputs.outputs.module }} to version ${{ steps.process-inputs.outputs.version }}"
