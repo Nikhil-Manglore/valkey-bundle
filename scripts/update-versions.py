@@ -27,7 +27,7 @@ def get_known_modules_from_versions(versions_data: Dict[str, Any]) -> Dict[str, 
     modules = {}
     
     for module_name in versions_data[latest]["modules"].keys():
-        repo_name = f"valkey-io/{module_name}"
+        repo_name = f"Nikhil-Manglore/{module_name}"
         modules[module_name] = repo_name
     
     logging.info(f"Found modules in versions.json: {list(modules.keys())}")
