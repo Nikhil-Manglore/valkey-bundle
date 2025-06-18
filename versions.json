@@ -1,6 +1,6 @@
 {
   "8.1": {
-    "version": "8.1.2",
+    "version": "8.1.3",
     "valkey-server": {
       "version": "8.1.1"
     },
@@ -9,13 +9,13 @@
         "version": "1.0.1"
       },
       "valkey-bloom": {
-        "version": "1.0.0"
+        "version": "1.0.1"
       },
       "valkey-search": {
         "version": "1.0.1"
       },
       "valkey-ldap": {
-        "version": "1.0.0"
+        "version": "1.0.1"
       }
     }
   }
