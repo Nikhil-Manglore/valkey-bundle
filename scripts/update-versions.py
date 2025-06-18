@@ -97,19 +97,22 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
         if module_key not in versions_data[latest]["modules"]:
             logging.info(f"Adding new module {module_key} to existing version block")
             versions_data[latest]["modules"][module_key] = {"version": new_version}
+        else:
+            versions_data[latest]["modules"][module_key]["version"] = new_version
+
+        try:
+            pr_check_output = subprocess.check_output(
+                ["gh", "pr", "list", "--head", "valkey-bundle-update", "--base", "main", "--json", "number"],
+                text=True
+            )
+            pr_list = json.loads(pr_check_output)
+            if len(pr_list) == 0:
+                current_version = versions_data[latest]["version"]
+                major, minor, patch = map(int, current_version.split('.'))
+                versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to check PR status with GitHub CLI: {e}")
         
-        current_bundle_version = versions_data[latest]["version"]
-        original_version = tuple(map(int, current_bundle_version.split('.')))
-
-        versions_data[latest]["modules"][module_key]["version"] = new_version
-
-        valkey_version = versions_data[latest]["valkey-server"]["version"]
-        valkey_version_tuple = tuple(map(int, valkey_version.split('.')[:2]))
-
-        if original_version[:2] == valkey_version_tuple and original_version == tuple(map(int, valkey_version.split('.'))):
-            major, minor, patch = original_version
-            versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
-            
         return versions_data
 
 if __name__ == "__main__":
