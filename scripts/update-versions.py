@@ -108,7 +108,7 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
             pr_list = json.loads(pr_check_output)
             if len(pr_list) == 0:
                 current_version = versions_data[latest]["version"]
-                major, minor, patch = map(int, current_version.split('.'))
+                major, minor, patch, rc = parse_version(current_version)
                 versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to check PR status with GitHub CLI: {e}")
