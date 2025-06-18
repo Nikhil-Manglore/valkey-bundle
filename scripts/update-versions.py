@@ -101,17 +101,16 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
             versions_data[latest]["modules"][module_key]["version"] = new_version
 
         try:
-            pr_check_output = subprocess.check_output(
-                ["gh", "pr", "list", "--head", "valkey-bundle-update", "--base", "main", "--json", "number"],
-                text=True
+            subprocess.check_output(
+                ["git", "ls-remote", "--exit-code", "--heads", "origin", "valkey-bundle-update"],
+                stderr=subprocess.DEVNULL
             )
-            pr_list = json.loads(pr_check_output)
-            if len(pr_list) == 0:
-                current_version = versions_data[latest]["version"]
-                major, minor, patch, rc = parse_version(current_version)
-                versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to check PR status with GitHub CLI: {e}")
+            logging.info("Branch valkey-bundle-update exists — skipping patch bump.")
+        except subprocess.CalledProcessError:
+            current_version = versions_data[latest]["version"]
+            major, minor, patch, rc = parse_version(current_version)
+            versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
+            logging.info("Branch valkey-bundle-update not found — bumping patch version.")
         
         return versions_data
 
