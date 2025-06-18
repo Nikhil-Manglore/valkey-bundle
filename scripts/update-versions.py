@@ -97,8 +97,18 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
         if module_key not in versions_data[latest]["modules"]:
             logging.info(f"Adding new module {module_key} to existing version block")
             versions_data[latest]["modules"][module_key] = {"version": new_version}
-        else:
-            versions_data[latest]["modules"][module_key]["version"] = new_version
+        
+        current_bundle_version = versions_data[latest]["version"]
+        original_version = tuple(map(int, current_bundle_version.split('.')))
+
+        versions_data[latest]["modules"][module_key]["version"] = new_version
+
+        valkey_version = versions_data[latest]["valkey-server"]["version"]
+        valkey_version_tuple = tuple(map(int, valkey_version.split('.')[:2]))
+
+        if original_version[:2] == valkey_version_tuple and original_version == tuple(map(int, valkey_version.split('.'))):
+            major, minor, patch = original_version
+            versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
             
         return versions_data
 
