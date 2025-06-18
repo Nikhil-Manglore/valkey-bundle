@@ -1,159 +1,145 @@
-name: Automated Valkey Bundle Release
+#!/usr/bin/env python3
 
-on:
-  repository_dispatch:
-    types: [valkey-release, json-release, bloom-release, search-release, ldap-release]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to be released'
-        required: true
-      component:
-        description: 'Valkey Bundle component to be released'
-        required: true
-        type: choice
-        options: [valkey, json, bloom, search, ldap]
+import json
+import sys
+import re
+import logging
+import subprocess
+from typing import Dict, Any
 
-permissions:
-  contents: write
-  pull-requests: write
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-jobs:
-  update-files:
-    name: Update Files and Create Pull Request
-    runs-on: ubuntu-latest
-    concurrency:
-      group: valkey-bundle-updates
-      cancel-in-progress: false
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+def parse_version(version: str) -> tuple:
+    """Parse version string into (major, minor, patch, rc)."""
+    match = re.match(r'(\d+)\.(\d+)\.(\d+)(?:-rc(\d+))?', version)
+    if not match:
+        raise ValueError(f"Invalid version format: {version}. The version must be in the form of Major.Minor.Patch")
+    major, minor, patch, rc = match.groups()
+    return (int(major), int(minor), int(patch), int(rc) if rc else None)
 
-      - name: Check for an existing pull request branch
-        id: check-branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCH_NAME="valkey-bundle-update"
-          echo "branch-name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          if git ls-remote --exit-code --heads origin $BRANCH_NAME; then
-            echo "branch-exists=true" >> $GITHUB_OUTPUT
-            echo "Checking out existing branch"
-            git fetch origin $BRANCH_NAME
-            git checkout $BRANCH_NAME
-            git pull origin $BRANCH_NAME
-          else
-            echo "branch-exists=false" >> $GITHUB_OUTPUT
-            echo "Staying on mainline for new branch creation"
-          fi
+def get_latest_major_minor(versions_data: Dict[str, Any]) -> str:
+    """Get the latest major.minor version (bottom most block)."""
+    return max(versions_data.keys(), key=lambda x: [int(i) for i in x.split('.')])
 
-      - name: Process inputs
-        id: process-inputs
-        run: |
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            # From "repository_dispatch" trigger
-            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
-            echo "component=${{ github.event.client_payload.component }}" >> $GITHUB_OUTPUT
-          else
-            # From "workflow_dispatch" trigger
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "component=${{ github.event.inputs.component }}" >> $GITHUB_OUTPUT
-          fi
+def get_known_modules_from_versions(versions_data: Dict[str, Any]) -> Dict[str, str]:
+    """Get all modules from the latest version block in versions.json."""
+    latest = get_latest_major_minor(versions_data)
+    modules = {}
+    
+    for module_name in versions_data[latest]["modules"].keys():
+        repo_name = f"valkey-io/{module_name}"
+        modules[module_name] = repo_name
+    
+    logging.info(f"Found modules in versions.json: {list(modules.keys())}")
+    return modules
 
-      - name: Guard against unsupported Valkey versions
-        if: ${{ steps.process-inputs.outputs.component == 'valkey' }}
-        run: |
-          VERSION="${{ steps.process-inputs.outputs.version }}"
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
+def get_latest_stable_module_release(repository: str) -> str:
+    """Use GitHub CLI to fetch the latest stable release tag for each module."""
+    try:
+        github_cli_output = subprocess.check_output(['gh', 'release', 'list', '--repo', repository], text=True)
+        for line in github_cli_output.splitlines():
+            columns = line.split() # Format is: Title | Type | Tag Name | Published
+            if len(columns) >= 4 and columns[1] == 'Latest':
+                return columns[2]
+        raise RuntimeError(f"No stable release found for {repository}")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to get release list for {repository}: {e}")
 
-          if [ "$MAJOR" -lt 8 ] || { [ "$MAJOR" -eq 8 ] && [ "$MINOR" -lt 1 ]; }; then
-            echo "Valkey version must be >= 8.1. Current: $VERSION"
-            exit 1
-          fi
+def update_versions(versions_data: Dict[str, Any], component_name: str, new_version: str) -> Dict[str, Any]:
+    """Update versions.json according to Valkey and module versioning strategy."""
+    major, minor, patch, rc = parse_version(new_version)
+    new_major_minor_release = f"{major}.{minor}"
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+    if component_name == 'valkey':
+        existing_entry = new_major_minor_release in versions_data
 
-      - name: Update versions.json
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python scripts/update-versions.py versions.json \
-            "${{ steps.process-inputs.outputs.component }}" \
-            "${{ steps.process-inputs.outputs.version }}"
+        if existing_entry:
+            # Patch or RC update
+            versions_data[new_major_minor_release]["version"] = new_version
+            versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
+        else:
+            # New major/minor version
+            known_modules = get_known_modules_from_versions(versions_data)
 
-      - name: Update Dockerfiles
-        run: |
-          # Download the scripts for bashbrew in local
-          jqt='.jq-template.awk'
-          wget -qO "$jqt" 'https://github.com/docker-library/bashbrew/raw/9f6a35772ac863a0241f147c820354e4008edf38/scripts/jq-template.awk'
-          jqf='.template-helper-functions.jq'
-          wget -qO "$jqf" 'https://github.com/docker-library/bashbrew/raw/08c926140ad0af22de58c2a2656afda58082ba3e/scripts/template-helper-functions.jq'
+            module_versions = {}
+            for name, repository in known_modules.items():
+                latest_version = get_latest_stable_module_release(repository)
+                module_versions[name] = {"version": latest_version}
 
-          # Run update script
-          chmod +x apply-templates.sh
-          ./apply-templates.sh
+            new_entry = {
+                "version": new_version,
+                "valkey-server": {
+                    "version": new_version
+                },
+                "modules": module_versions
+            }
+            
+            versions_data[new_major_minor_release] = new_entry
 
-          # Commit the changes
-          git add .
-          git commit -m "Update versions.json and Dockerfiles for ${{ steps.process-inputs.outputs.component }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
+        return versions_data
 
-      - name: Set up bashbrew
-        uses: docker-library/bashbrew@v0.1.12
+    else:
+        # Handle module update
+        module_key = f"valkey-{component_name}"
+        latest = get_latest_major_minor(versions_data)
 
-      - name: Generate Jobs Strategy
-        id: generate-jobs
-        run: |
-          BASHBREW_SCRIPTS=/home/runner/work/_actions/docker-library/bashbrew/v0.1.12/scripts
-          strategy="$("$BASHBREW_SCRIPTS/github-actions/generate.sh")"
-          echo "strategy=$strategy" >> $GITHUB_OUTPUT
+        is_module_major_release = (minor == 0 and patch == 0)
 
-      - name: Update DockerHub description
-        run: |
-          echo '${{ steps.generate-jobs.outputs.strategy }}' > strategy.json
-          python scripts/update-dockerhub-description.py strategy.json dockerhub-description-template.md dockerhub-description.md
-          rm strategy.json
-          git add dockerhub-description.md
-          git commit -m "Update DockerHub description for ${{ steps.process-inputs.outputs.component }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
-      
-      - name: Push changes and update existing PR
-        if: steps.check-branch.outputs.branch-exists == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
-          git push origin $BRANCH_NAME
+        if is_module_major_release:
+            valkey_version = versions_data[latest]["valkey-server"]["version"]
+            if not re.match(r'^\d+\.0\.0(?:-rc\d+)?$', valkey_version):
+                logging.error(
+                    f"Can't release {component_name} {new_version}: "
+                    f"The latest Valkey version is '{valkey_version}', which is not a new major version release (X.0.0 or X.0.0-rcY)."
+                )
+                sys.exit(1)
+            
+        if module_key not in versions_data[latest]["modules"]:
+            logging.info(f"Adding new module {module_key} to existing version block")
+            versions_data[latest]["modules"][module_key] = {"version": new_version}
+        else:
+            versions_data[latest]["modules"][module_key]["version"] = new_version
+
+        try:
+            pr_check_output = subprocess.check_output(
+                ["gh", "pr", "list", "--head", "valkey-bundle-update", "--base", "main", "--json", "number"],
+                text=True
+            )
+            pr_list = json.loads(pr_check_output)
+            if len(pr_list) == 0:
+                current_version = versions_data[latest]["version"]
+                major, minor, patch, rc = parse_version(current_version)
+                versions_data[latest]["version"] = f"{major}.{minor}.{patch + 1}"
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to check PR status with GitHub CLI: {e}")
         
-      - name: Create Pull Request
-        if: steps.check-branch.outputs.branch-exists == 'false'
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.check-branch.outputs.branch-name }}
-          delete-branch: false
-          title: "Automated Updates for Valkey Bundle"
-          body: |
-            This PR contains automated updates for the valkey bundle release.
-            
-            See commit history for details of the repositories and versions that were updated.
-            
-            Changes include:
-            - Updated versions.json
-            - Updated Dockerfiles  
-            - Updated DockerHub description
+        return versions_data
 
-      - name: Comment on Pull Request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BRANCH_NAME="${{ steps.check-branch.outputs.branch-name }}"
-          gh pr comment "$BRANCH_NAME" --body "**Updated ${{ steps.process-inputs.outputs.component }} to version ${{ steps.process-inputs.outputs.version }}.**"
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        logging.error("Usage: update_versions.py <json_file> <component> <new_version>")
+        sys.exit(1)
+
+    json_file = sys.argv[1]
+    component_name = sys.argv[2]
+    new_version = sys.argv[3]
+
+    try:
+        with open(json_file, 'r') as f:
+            versions_data = json.load(f)
+        
+        parse_version(new_version)
+    except FileNotFoundError as file_error:
+        logging.error(f"File not found: {file_error}")
+        sys.exit(1)
+    except ValueError as version_error:
+        logging.error(version_error)
+        sys.exit(1)
+
+    updated_file = update_versions(versions_data, component_name, new_version)
+
+    with open(json_file, 'w') as f:
+        json.dump(updated_file, f, indent=2)
+        f.write('\n')
+
+    logging.info(f"Updated {component_name} to {new_version}")
