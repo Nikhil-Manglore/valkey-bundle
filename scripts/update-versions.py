@@ -55,8 +55,10 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
 
         if existing_entry:
             # Patch or RC update
-            versions_data[new_major_minor_release]["version"] = new_version
-            versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
+            existing_version = versions_data[new_major_minor_release]["version"]
+            if parse_version(new_version) > parse_version(existing_version):
+                versions_data[new_major_minor_release]["version"] = new_version
+                versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
         else:
             # New major/minor version
             known_modules = get_known_modules_from_versions(versions_data)
@@ -105,7 +107,7 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                 ["git", "ls-remote", "--exit-code", "--heads", "origin", "valkey-bundle-update"],
                 stderr=subprocess.DEVNULL
             )
-            logging.info("Branch valkey-bundle-update exists — skipping patch bump.")
+            logging.info("Branch valkey-bundle-update exists — skipping bundle version patch bump.")
         except subprocess.CalledProcessError:
             current_version = versions_data[latest]["version"]
             major, minor, patch, rc = parse_version(current_version)
