@@ -56,11 +56,9 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
         if existing_entry:
             # Patch or RC update
             existing_bundle_version = versions_data[new_major_minor_release]["version"]
-            new_version_tuple = (major, minor, patch)
-            existing_bundle_version_tuple = parse_version(existing_bundle_version)[:3]
             versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
 
-            if parse_version(new_version_tuple) > parse_version(existing_bundle_version_tuple):
+            if (major, minor, patch) > parse_version(existing_bundle_version)[:3]:
                 versions_data[new_major_minor_release]["version"] = new_version 
         else:
             # New major/minor version
