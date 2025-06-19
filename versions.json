@@ -18,5 +18,25 @@
         "version": "1.0.0"
       }
     }
+  },
+  "8.2": {
+    "version": "8.2.0",
+    "valkey-server": {
+      "version": "8.2.0"
+    },
+    "modules": {
+      "valkey-json": {
+        "version": "1.0.0"
+      },
+      "valkey-bloom": {
+        "version": "1.0.0"
+      },
+      "valkey-search": {
+        "version": "1.0.1"
+      },
+      "valkey-ldap": {
+        "version": "1.0.0"
+      }
+    }
   }
 }
