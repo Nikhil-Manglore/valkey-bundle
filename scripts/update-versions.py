@@ -49,25 +49,15 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
     """Update versions.json according to Valkey and module versioning strategy."""
     major, minor, patch, rc = parse_version(new_version)
     new_major_minor_release = f"{major}.{minor}"
+    latest = get_latest_major_minor(versions_data)
 
     if component_name == "bundle":
-        logging.info(f"Manual GA trigger: updating latest bundle block with version {new_version}")
+        versions_data[latest]["version"] = new_version
+        versions_data[latest]["valkey-server"]["version"] = get_latest_stable_module_release("valkey-io/valkey")
 
-        latest_block_key = get_latest_major_minor(versions_data)
-
-        # Set the bundle version (top-level version)
-        versions_data[latest_block_key]["version"] = new_version
-
-        # Get the latest Valkey server release
-        valkey_repo = "valkey-io/valkey"
-        latest_valkey = get_latest_stable_module_release(valkey_repo)
-        versions_data[latest_block_key]["valkey-server"]["version"] = latest_valkey
-
-        # Update each module version with latest release
-        for module_key in versions_data[latest_block_key]["modules"].keys():
+        for module_key in versions_data[latest]["modules"].keys():
             repo = f"valkey-io/{module_key}"
-            latest_module_version = get_latest_stable_module_release(repo)
-            versions_data[latest_block_key]["modules"][module_key]["version"] = latest_module_version
+            versions_data[latest]["modules"][module_key]["version"] = get_latest_stable_module_release(repo)
         return versions_data
 
     if component_name == 'valkey':
@@ -104,7 +94,6 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
     else:
         # Handle module update
         module_key = f"valkey-{component_name}"
-        latest = get_latest_major_minor(versions_data)
 
         is_module_major_release = (minor == 0 and patch == 0)
 
