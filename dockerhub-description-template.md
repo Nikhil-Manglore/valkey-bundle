@@ -21,9 +21,9 @@ This image is built on top of the official Valkey base image and simplifies depl
 
 ## Module Versions
 
-| valkey-bundle | valkey-json | valkey-bloom | valkey-search | valkey-ldap |
-|-------------------------|-------------|--------------|---------------|---------------|
-| [{extension_version}](https://github.com/valkey-io/valkey-bundle/releases/tag/{extension_version}) | [{json_version}](https://github.com/valkey-io/valkey-json/releases/tag/{json_version})| [{bloom_version}](https://github.com/valkey-io/valkey-bloom/releases/tag/{bloom_version})| [{search_version}](https://github.com/valkey-io/valkey-search/releases/tag/{search_version}) | [{ldap_version}](https://github.com/valkey-io/valkey-ldap/releases/tag/{ldap_version}) |
+| valkey-bundle | valkey | valkey-json | valkey-bloom | valkey-search | valkey-ldap |
+|-------------------------|-------------|-------------|--------------|---------------|---------------|
+| [{bundle_version}](https://github.com/valkey-io/valkey-bundle/releases/tag/{bundle_version}) |[{valkey_version}](https://github.com/valkey-io/valkey/releases/tag/{valkey_version}) | [{json_version}](https://github.com/valkey-io/valkey-json/releases/tag/{json_version})| [{bloom_version}](https://github.com/valkey-io/valkey-bloom/releases/tag/{bloom_version})| [{search_version}](https://github.com/valkey-io/valkey-search/releases/tag/{search_version}) | [{ldap_version}](https://github.com/valkey-io/valkey-ldap/releases/tag/{ldap_version}) |
 
 
 # Security
