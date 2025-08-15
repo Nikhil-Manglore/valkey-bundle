@@ -97,6 +97,7 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
             }
             
             versions_data[new_major_minor_release] = new_entry
+            changed_bundles.append(new_major_minor_release)
 
         return versions_data, changed_bundles
 
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     
     # Write changed bundle versions to file for CI
     if changed_bundles:
-        with open('.changed-bundles', 'w') as f:
+        with open('.changed-bundles', 'a') as f:
             for bundle in changed_bundles:
                 f.write(f"{bundle}\n")
         logging.info(f"Changed bundles written to .changed-bundles: {changed_bundles}")
