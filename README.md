@@ -10,7 +10,7 @@ A new Docker Image should be built and published after a new major, minor or pat
 
 ## How do you build and publish new version of a Docker Image?
 
-*Pre-requisites: [Fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) this repo, create a private Docker Hub repo, and setup your GitHub secrets to access the private Docker Hub repo.*
+*Prerequisites: [Fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) this repo, create a private Docker Hub repo, and setup your GitHub secrets to access the private Docker Hub repo.*
 
 Upon releasing a new version of Valkey or any of its supported modules, a pull request will automatically be created with version specific dockerfiles. Additionally, `versions.json` will be updated with the most up to date versions and `dockerhub-description.md` will be updated with the tags. Once the pull request is merged, sit back, relax, and enjoy looking at your creation getting published to the official `valkey-bundle` Docker Hub page.
 
