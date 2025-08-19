@@ -88,7 +88,7 @@ for version; do
 		fi
 
 		if [ "$variant" = 'debian' ]; then
-			suite="bookworm"
+			suite="$(jq -r ".[env.version].\"debian-version\"" versions.json)"
             suiteAliases=( "${versionAliases[@]/%/-$suite}" )
             suiteAliases=( "${suiteAliases[@]//latest-/}" )
 		    variantAliases+=( "${suiteAliases[@]}" )
