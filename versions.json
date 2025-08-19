@@ -4,6 +4,7 @@
     "valkey-server": {
       "version": "8.1.2"
     },
+    "debian-version": "bookworm",
     "modules": {
       "valkey-json": {
         "version": "1.0.1"

@@ -90,6 +90,7 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                 "valkey-server": {
                     "version": new_version
                 },
+                "debian-version": "trixie", 
                 "modules": module_versions
             }
             
