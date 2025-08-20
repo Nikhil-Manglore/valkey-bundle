@@ -88,6 +88,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/valkey-container
           path: valkey-container
+          clean: false
 
       - name: Update versions.json
         env:
