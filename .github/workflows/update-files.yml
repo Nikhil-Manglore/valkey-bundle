@@ -83,6 +83,13 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Checkout valkey-container
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/valkey-container
+          path: valkey-container
+          clean: false
+
       - name: Update versions.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

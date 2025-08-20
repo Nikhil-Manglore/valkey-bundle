@@ -33,6 +33,16 @@ def get_known_modules_from_versions(versions_data: Dict[str, Any]) -> Dict[str, 
     logging.info(f"Found modules in versions.json: {list(modules.keys())}")
     return modules
 
+def get_debian_version(valkey_version: str) -> str:
+    """Gets the most up to date Debian version from the container."""
+    major, minor, _, _ = parse_version(valkey_version)
+    version_key = f"{major}.{minor}"
+    
+    with open('./valkey-container/versions.json', 'r') as f:
+        container_versions = json.load(f)
+    
+    return container_versions[version_key]["debian"]["version"]
+
 def get_latest_stable_module_release(repository: str) -> str:
     """Use GitHub CLI to fetch the latest stable release tag for each module."""
     try:
@@ -75,7 +85,7 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
             except subprocess.CalledProcessError:
                 bundle_major, bundle_minor, bundle_patch, bundle_rc = parse_version(existing_bundle_version)
                 versions_data[new_major_minor_release]["version"] = f"{bundle_major}.{bundle_minor}.{bundle_patch + 1}"
-                logging.info("No PR — bumped bundle version.")
+                logging.info("No PR Exists — bumped bundle version.")
         else:
             # New major/minor version
             known_modules = get_known_modules_from_versions(versions_data)
@@ -90,7 +100,10 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                 "valkey-server": {
                     "version": new_version
                 },
-                "modules": module_versions
+                "modules": module_versions,
+                "debian": {
+                    "version": get_debian_version(new_version)
+                }
             }
             
             versions_data[new_major_minor_release] = new_entry
