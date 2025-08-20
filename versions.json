@@ -17,6 +17,9 @@
       "valkey-ldap": {
         "version": "1.0.0"
       }
+    },
+    "debian": {
+      "version": "bookworm"
     }
   }
 }

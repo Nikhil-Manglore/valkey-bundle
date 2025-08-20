@@ -2,7 +2,7 @@
 {{ if env.variant == "alpine" then ( -}}
 FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-alpine AS build
 {{ ) else ( -}}
-FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-bookworm AS build
+FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-{{ ."debian".version }} AS build
 {{ ) end -}}
 
 ARG SERVER_VERSION={{ ."valkey-server".version }}
@@ -94,7 +94,7 @@ RUN cargo build --all --all-targets --release;
 {{ if env.variant == "alpine" then ( -}}
 FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-alpine
 {{ ) else ( -}}
-FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-bookworm
+FROM docker.io/valkey/valkey:{{ ."valkey-server".version }}-{{ ."debian".version }}
 {{ ) end -}}
 
 {{ if env.variant == "alpine" then ( -}}
