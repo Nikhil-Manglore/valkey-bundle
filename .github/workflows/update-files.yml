@@ -121,9 +121,13 @@ jobs:
 
           ./apply-templates.sh
 
-          # Stage only Dockerfile changes under the bundle repo
-          git add **/Dockerfile **/Dockerfile.* || true
-          git commit -m "Update Dockerfiles for ${{ steps.process-inputs.outputs.component }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
+          # Stage all changes from apply-templates.sh
+          git add .
+          if git diff --staged --quiet; then
+            echo "No Dockerfile changes to commit"
+          else
+            git commit -m "Update Dockerfiles for ${{ steps.process-inputs.outputs.component }} ${{ steps.process-inputs.outputs.version }}"
+          fi
 
       - name: Set up bashbrew
         uses: docker-library/bashbrew@v0.1.12
