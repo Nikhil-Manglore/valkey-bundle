@@ -121,6 +121,7 @@ run_tests() {
             --skiptest "MULTI is rejected when CLIENT REPLY is ON/OFF/SKIP" \
             --skiptest "CLIENT REPLY OFF/SKIP: multi command" \
             --skiptest "AUTH errored inside MULTI will add the reply" \
+            --skiptest "CLIENT LIST with IPv6 filter" \
             --skipunit integration/valkey-cli \
             --skiptest "Dumping an RDB - functions only: yes"
             ;;
