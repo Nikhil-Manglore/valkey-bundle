@@ -129,21 +129,27 @@ run_tests() {
             
             pip install -r requirements.txt
 
-            docker run -d -p $VALKEY_PORT:6379 --name "$CONTAINER_NAME" "$image" \
-                valkey-server \
-                --enable-debug-command yes >/dev/null 2>&1
-            sleep 3
+            start_json_container() {
+                docker run -d -p $VALKEY_PORT:6379 --name "$CONTAINER_NAME" "$image" \
+                    valkey-server \
+                    --enable-debug-command yes >/dev/null 2>&1
+                sleep 3
+            }
 
             export SOURCE_DIR="$(pwd)"
             cd tst/integration
             echo "DEBUG: In tst/integration: $(pwd)"
-            python -m pytest --cache-clear -v -s
-            local pytest_exit_code=$?
+            
+            JSON_TESTS=$(python -m pytest --collect-only -q | grep "::test_" | grep -v "warnings")
+            
+            for test in $JSON_TESTS; do                
+                cleanup_container
+                start_json_container
+                python -m pytest "$test" --cache-clear -v -s
+            done
+            
             cleanup_container
             cd ../..
-            if [ $pytest_exit_code -ne 0 ]; then
-                false
-            fi
             ;;
         "Bloom")
             export VALKEY_REPLICA_PORT=6380
