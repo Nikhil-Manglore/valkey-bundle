@@ -43,14 +43,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Checkout valkey-container (sibling directory)
+      - name: Checkout valkey-container
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/valkey-container
           path: valkey-container
           clean: false
 
-      # Safety: ensure bundle repo ignores the sibling folder even if referenced
+      # Safety: ensure bundle repo ignores the valkey-container folder even if referenced
       - name: Exclude valkey-container in bundle repo
         run: |
           echo "/valkey-container" >> .git/info/exclude
@@ -131,7 +131,7 @@ jobs:
       - name: Generate Jobs Strategy
         id: generate-jobs
         run: |
-          BASHBREW_SCRIPTS="${GITHUB_WORKSPACE}/_actions/docker-library/bashbrew/v0.1.12/scripts"
+          BASHBREW_SCRIPTS="../_actions/docker-library/bashbrew/v0.1.12/scripts"
           strategy="$("$BASHBREW_SCRIPTS/github-actions/generate.sh")"
           echo "strategy=$(echo "$strategy" | jq -c '.')" >> $GITHUB_OUTPUT
 
