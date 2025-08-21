@@ -148,13 +148,10 @@ jobs:
           version="${{ matrix.version.name }}"
           major_minor=$(echo "$version" | cut -d'.' -f1-2)
           
-          # Determine the distro from the directory path
           directory="${{ matrix.version.meta.entries[0].directory }}"
           if [[ "$directory" == *"alpine"* ]]; then
             distro="alpine"
-          elif [[ "$directory" == *"bookworm"* ]]; then
-            distro="debian"
-          elif [[ "$directory" == *"trixie"* ]]; then
+          else
             distro="debian"
           fi
           
