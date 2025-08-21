@@ -257,7 +257,13 @@ jobs:
             
             # Get and filter tags
             echo "  Processing tags..."
-            tag_file="all-tags/tags-${version}/tags.txt"
+            # Find the actual tag file (could be tags-8.1.0, tags-8.1.0-alpine, etc.)
+            tag_file=$(find all-tags/ -name "tags-${version}*" -type d | head -1)
+            if [[ -n "$tag_file" ]]; then
+                tag_file="$tag_file/tags.txt"
+            else
+                tag_file="all-tags/tags-${version}/tags.txt"
+            fi
             [[ -f "$tag_file" ]] || { echo "    No tags file for $version, skipping"; continue; }
             
             all_tags=$(cat "$tag_file" | sed 's/,/ /g')
