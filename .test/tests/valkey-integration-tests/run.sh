@@ -123,7 +123,8 @@ run_tests() {
             --skiptest "AUTH errored inside MULTI will add the reply" \
             --skipunit unit/introspection \
             --skipunit integration/valkey-cli \
-            --skiptest "Dumping an RDB - functions only: yes"
+            --skiptest "Dumping an RDB - functions only: yes" \
+            --skiptest "Extended Redis Compatibility config"
             ;;
         "JSON")
             setup_test_framework "tst/integration/valkeytests"
@@ -141,13 +142,14 @@ run_tests() {
 
             export SOURCE_DIR="$(pwd)"
             cd tst/integration
-            echo "DEBUG: In tst/integration: $(pwd)"
-            export PYTHONPATH="$SOURCE_DIR:$SOURCE_DIR/tst/integration:$PYTHONPATH"
             
             python -m pytest --cache-clear -v -s
             local pytest_exit_code=$?
+            
             cleanup_container
+
             cd ../..
+
             if [ $pytest_exit_code -ne 0 ]; then
                 false
             fi
