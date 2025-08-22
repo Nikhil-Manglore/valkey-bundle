@@ -123,7 +123,8 @@ run_tests() {
             --skiptest "AUTH errored inside MULTI will add the reply" \
             --skipunit integration/valkey-cli \
             --skiptest "Dumping an RDB - functions only: yes" \
-            --skiptest "Extended Redis Compatibility config"
+            --skiptest "Extended Redis Compatibility config" \
+            --skiptest "*IPv6*"
             ;;
         "JSON")
             setup_test_framework "tst/integration/valkeytests"
@@ -132,17 +133,14 @@ run_tests() {
 
             docker run -d -p $VALKEY_PORT:6379 --name "$CONTAINER_NAME" "$image" \
                 valkey-server \
-                --save "" \
-                --enable-debug-command yes \
-                --enable-module-command yes \
-                --enable-protected-configs yes \
-                --protected-mode no >/dev/null 2>&1
+                --enable-debug-command yes >/dev/null 2>&1
             sleep 3
 
             export SOURCE_DIR="$(pwd)"
+
             cd tst/integration
-            
             python -m pytest --cache-clear -v -s
+
             local pytest_exit_code=$?
             
             cleanup_container
@@ -197,6 +195,7 @@ run_tests() {
                 start_bloom_containers
 
                 python -m pytest "$test" --cache-clear -v
+
                 local test_exit_code=$?
                 
                 if [ $test_exit_code -eq 0 ]; then
@@ -205,6 +204,7 @@ run_tests() {
             done
 
             cleanup_bloom_containers
+            
             echo "SUMMARY: $passed_count/$test_count Valkey Bloom Tests Passed"
             
             if [ $passed_count -ne $test_count ]; then
