@@ -124,7 +124,8 @@ run_tests() {
             --skipunit integration/valkey-cli \
             --skiptest "Dumping an RDB - functions only: yes" \
             --skiptest "Extended Redis Compatibility config" \
-            --skiptest "*IPv6*"
+            --skiptest "CLIENT LIST with IPv6 filter" \
+            --skiptest "CLIENT LIST with IPv6 negative filter"
             ;;
         "JSON")
             setup_test_framework "tst/integration/valkeytests"
