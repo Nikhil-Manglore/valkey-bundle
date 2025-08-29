@@ -44,11 +44,18 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
       - name: Checkout valkey-container
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           repository: ${{ github.repository_owner }}/valkey-container
           path: valkey-container
           clean: false
+
+      - name: Checkout valkey-release-automation
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          repository: ${{ github.repository_owner }}/valkey-release-automation
+          ref: fix_docker_issue
+          path: valkey-release-automation
 
       - name: Exclude valkey-container in bundle repo
         run: |
@@ -136,6 +143,13 @@ jobs:
           rm strategy.json
           git add dockerhub-description.md
           git commit -m "Update DockerHub description for ${{ steps.process-inputs.outputs.component }} ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
+
+      - name: Update Bundle Alias
+        if: steps.process-inputs.outputs.component == 'valkey'
+        run: |
+          python ../valkey-release-automation/scripts/automate_alias_update.py generate-stackbrew-library.sh "${{ steps.process-inputs.outputs.version }}"
+          git add generate-stackbrew-library.sh
+          git commit -m "Update alias for valkey version ${{ steps.process-inputs.outputs.version }}" || echo "No changes to commit"
 
       - name: Update Bundle Alias
         if: steps.process-inputs.outputs.component == 'valkey'
