@@ -161,6 +161,7 @@ jobs:
         with:
           path: valkey-bundle
           token: ${{ secrets.VALKEY_BUNDLE_PAT_FOR_PR }}
+          base: mainline
           branch: ${{ steps.check-branch.outputs.branch-name }}
           delete-branch: false
           title: "Automated Updates for Valkey Bundle"
