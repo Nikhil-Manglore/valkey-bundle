@@ -13,11 +13,10 @@ Last updated: 2025-10-08
 
 
 ## Official releases
-- [`8.1.3`, `8.1`, `8`, `latest`, `8.1.3-trixie`, `8.1-trixie`, `8-trixie`, `trixie`](https://github.com/valkey-io/valkey-bundle/blob/mainline/8.1/debian/Dockerfile)
-- [`8.1.3-alpine`, `8.1-alpine`, `8-alpine`, `alpine`](https://github.com/valkey-io/valkey-bundle/blob/mainline/8.1/alpine/Dockerfile)
-## Release candidates
-- [`9.0.0-rc3`, `9.0-rc3`, `9.0.0-rc3-trixie`, `9.0-rc3-trixie`](https://github.com/valkey-io/valkey-bundle/blob/mainline/9.0/debian/Dockerfile)
-- [`9.0.0-rc3-alpine`, `9.0-rc3-alpine`](https://github.com/valkey-io/valkey-bundle/blob/mainline/9.0/alpine/Dockerfile)
+- [`9.0.0`, `9.0`, `9`, `latest`, `9.0.0-trixie`, `9.0-trixie`, `9-trixie`, `trixie`](https://github.com/valkey-io/valkey-bundle/blob/mainline/9.0/debian/Dockerfile)
+- [`9.0.0-alpine`, `9.0-alpine`, `9-alpine`, `alpine`](https://github.com/valkey-io/valkey-bundle/blob/mainline/9.0/alpine/Dockerfile)
+- [`8.1.3`, `8.1`, `8`, `8.1.3-trixie`, `8.1-trixie`, `8-trixie`](https://github.com/valkey-io/valkey-bundle/blob/mainline/8.1/debian/Dockerfile)
+- [`8.1.3-alpine`, `8.1-alpine`, `8-alpine`](https://github.com/valkey-io/valkey-bundle/blob/mainline/8.1/alpine/Dockerfile)
 
 ## What is [Valkey Bundle](https://github.com/valkey-io/valkey-bundle)?
 --------------
