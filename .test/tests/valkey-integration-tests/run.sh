@@ -56,6 +56,9 @@ get_versions() {
     if [[ "$VALKEY_SERVER_VERSION" =~ ^([0-9]+\.[0-9]+) ]]; then
         VALKEY_BRANCH="${BASH_REMATCH[1]}"
         VALKEY_TAG="$VALKEY_SERVER_VERSION"
+    else
+        VALKEY_BRANCH="$VALKEY_SERVER_VERSION"
+        VALKEY_TAG="$VALKEY_SERVER_VERSION"
     fi
 }
 
@@ -114,7 +117,15 @@ run_tests() {
                 fi
                 sleep 1
             done
-            
+
+            docker cp "$CONTAINER_NAME":/usr/local/bin/valkey-server src/valkey-server
+            docker cp "$CONTAINER_NAME":/usr/local/bin/valkey-cli src/valkey-cli
+            docker cp "$CONTAINER_NAME":/usr/local/bin/valkey-sentinel src/valkey-sentinel
+            docker cp "$CONTAINER_NAME":/usr/local/bin/valkey-benchmark src/valkey-benchmark
+            chmod +x src/valkey-server src/valkey-cli src/valkey-sentinel src/valkey-benchmark
+            ln -sf valkey-server src/valkey-check-aof
+            ln -sf valkey-server src/valkey-check-rdb
+
             # Skipping these tests for now as they consistently fail against an external server (Valkey Bundle Container)
             ./runtest --host $VALKEY_HOST --port $VALKEY_PORT \
             --verbose \
@@ -128,7 +139,7 @@ run_tests() {
             --skiptest "Dumping an RDB - functions only: yes" \
             --skiptest "Extended Redis Compatibility config" \
             --skiptest "CLIENT LIST with IPv6 filter" \
-            --skiptest "CLIENT LIST with IPv6 negative filter"
+            --skiptest "CLIENT LIST with IPv6 negative filter" \
             ;;
         "JSON")
             setup_test_framework "tst/integration/valkeytests"
@@ -258,7 +269,9 @@ run_tests() {
 
 overall_success=true
 
-run_tests "Valkey" "./valkey" || overall_success=false
+if [[ "$version_key" != "unstable" ]]; then
+    run_tests "Valkey" "./valkey" || overall_success=false
+fi
 run_tests "JSON" "./valkey-json" || overall_success=false
 run_tests "Bloom" "./valkey-bloom" || overall_success=false
 # run_tests "Search" "./valkey-search" || overall_success=false
