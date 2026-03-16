@@ -73,6 +73,9 @@ for repo in "${repos[@]}"; do
         elif [[ "$repo" == "valkey-json" ]]; then
             echo "Cloning $repo from version tag $JSON_TAG"
             git clone -b "$JSON_TAG" --depth=1 "https://github.com/valkey-io/$repo.git" "./$repo"
+        elif [[ "$repo" == "valkey-search" ]]; then
+            echo "Cloning $repo from unstable branch"
+            git clone -b unstable --depth=1 "https://github.com/valkey-io/$repo.git" "./$repo"
         else
             echo "Cloning $repo from main branch"
             git clone --depth=1 "https://github.com/valkey-io/$repo.git" "./$repo"
@@ -233,36 +236,47 @@ run_tests() {
             cd integration
             export PYTHONPATH="$(pwd)/valkeytestframework:$(pwd)"
             export SKIPLOGCLEAN=1
-            
-            # Exclude tests incompatible with external server mode and only test core functionality:
-            # - Module loading tests: require control over module loading
-            # - Cluster tests: require multi-node cluster setup
-            # - RDB/persistence tests: require save/load control
-            # - Consistency/replication tests: require primary/replica setup
-            # - Cross-module tests: require specific module loading order
-            # - Debug mode tests: require FT._DEBUG commands not available in bundle
-            # - Eviction/OOM tests: modify memory settings that contaminate subsequent tests
-            # - Initial scan tests: require control over server startup
-            # - Metrics tests: check cumulative metrics that don't reset between tests
-            # - Config tests: check configs that differ in bundle vs local build
-            # - ACL tests: require ACL configuration control
+
+            # List of test files compatible with external server mode in order to test core functionality of Search
+            TEST_FILES=""
+            for test in \
+                test_aggregate_metrics.py \
+                test_expired.py \
+                test_filter_expressions.py \
+                test_ft_create.py \
+                test_ft_dropindex.py \
+                test_ft_internal_update.py \
+                test_fulltext.py \
+                test_fulltext_space_performance.py \
+                test_info.py \
+                test_json_operations.py \
+                test_multidb_search.py \
+                test_multi_lua.py \
+                test_non_vector.py \
+                test_query_parser.py \
+                test_reclaimable_memory.py \
+                test_vss_basic.py
+            do
+                if [ -f "$test" ]; then
+                    TEST_FILES="$TEST_FILES $test"
+                fi
+            done
+
+            # Exclude specific incompatible tests within the files
             SKIP_TESTS="not ("
-            SKIP_TESTS+="test_module_loaded or CME or cluster or Cluster"
-            SKIP_TESTS+=" or saverestore or skip_index_load or rdb_load or multidb_rdb"
-            SKIP_TESTS+=" or consistency or fanout or info_primary"
-            SKIP_TESTS+=" or TestJsonBackfill or cross_module or cancel or copy"
-            SKIP_TESTS+=" or debug or postfilter or inflight_blocking or versioning"
-            SKIP_TESTS+=" or eviction or oom or setup_test0"
-            SKIP_TESTS+=" or skipinitialscan or TestSkipInitialScan or dbnum or singleslot"
-            SKIP_TESTS+=" or TestCreateNonVectorIndexes or TestAppMetrics"
+            SKIP_TESTS+="Cluster or cluster or CME"
+            SKIP_TESTS+=" or TestFullTextDebugMode or debug"
+            SKIP_TESTS+=" or TestAppMetrics or TestCreateNonVectorIndexes"
+            SKIP_TESTS+=" or replica or acl"
+            SKIP_TESTS+=" or setup_test0 or rdb or backfill"
             SKIP_TESTS+=" or test_query_string_bytes_limit or test_tag_min_prefix_length_config"
             SKIP_TESTS+=" or test_text_search or test_suffix_search or test_text_size_estimation"
-            SKIP_TESTS+=" or acl"
+            SKIP_TESTS+=" or test_reclaimable_memory"
             SKIP_TESTS+=")"
 
             python -m pytest --log-cli-level=INFO --capture=sys --cache-clear -v \
                 -k "$SKIP_TESTS" \
-                test_*.py
+                $TEST_FILES
 
             local pytest_exit_code=$?
             cleanup_container
