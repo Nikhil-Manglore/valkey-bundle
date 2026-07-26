@@ -4,9 +4,9 @@
 # PLEASE DO NOT EDIT IT DIRECTLY.
 #
 
-FROM docker.io/valkey/valkey:9.0.4-alpine AS build
+FROM docker.io/valkey/valkey:9.0.5-alpine AS build
 
-ARG SERVER_VERSION=9.0.4
+ARG SERVER_VERSION=9.0.5
 
 RUN set -eux; \
     apk add --no-cache            \
@@ -16,12 +16,12 @@ RUN set -eux; \
 	        git                   \
 	        curl                  \
 	        clang                 \
-	        clang19-dev           \
+	        clang-dev             \
 	        gtest-dev             \
 	        ninja-build           \
 	        ninja-is-really-ninja \
 	        openssl-dev           \
-	        clang19-extra-tools   \
+	        clang-extra-tools     \
 	        linux-headers         \
 	        bash                  \
                 pkgconfig             \
@@ -62,7 +62,7 @@ RUN set -eux; \
 WORKDIR /opt/valkey-ldap
 RUN RUSTFLAGS="-C target-feature=-crt-static" cargo build --all --all-targets --release;
 
-FROM docker.io/valkey/valkey:9.0.4-alpine
+FROM docker.io/valkey/valkey:9.0.5-alpine
 
 RUN set -eux; \
     apk add --no-cache libstdc++; \
