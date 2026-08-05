@@ -72,14 +72,7 @@ def get_latest_module_release(repository: str, include_rc: bool = True) -> str:
     return tags[-1]
 
 def get_mainline_bundle_version(block: str) -> Optional[str]:
-    """Return the bundle version for a block on origin/mainline, or None if the block
-    doesn't exist on mainline yet (new major.minor line first introduced on this branch).
-
-    Git failures (e.g. missing origin/mainline ref, network errors) propagate as
-    CalledProcessError. We deliberately don't swallow them, because if we can't read
-    mainline we can't reason about whether this block has already been bumped on the
-    current branch, and silently proceeding could produce a double-bump.
-    """
+    """Return the bundle version for a block on origin/mainline."""
     result = subprocess.check_output(['git', 'show', 'origin/mainline:versions.json'], text=True)
     return json.loads(result).get(block, {}).get("version")
 
