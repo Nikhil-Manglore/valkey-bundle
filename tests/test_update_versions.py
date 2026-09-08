@@ -243,6 +243,23 @@ class TestUpdateVersionsValkey:
         # Bundle must bump because mainline == current (no prior bump on this branch)
         assert result["9.0"]["version"] == "9.0.2"
 
+    def test_valkey_replay_no_bump_when_version_unchanged(self, versions_data, mocker):
+        """Regression: a replayed valkey event whose version already matches the block must
+        not bump the bundle, even when mainline == current (post-merge replay)."""
+        mocker.patch.object(update_versions, "get_debian_version", return_value="bookworm")
+        self._mainline_matches_current(mocker, versions_data)
+        original = copy.deepcopy(versions_data)
+        result = update_versions_fn(versions_data, "valkey", "9.0.2")
+        assert result == original
+
+    def test_backported_valkey_replay_no_bump_when_version_unchanged(self, versions_data, mocker):
+        """Regression: replayed backported valkey event with unchanged version is a no-op."""
+        mocker.patch.object(update_versions, "get_debian_version", return_value="bookworm")
+        self._mainline_matches_current(mocker, versions_data)
+        original = copy.deepcopy(versions_data)
+        result = update_versions_fn(versions_data, "valkey", "8.1.4")
+        assert result == original
+
     def test_backported_valkey_does_not_touch_latest(self, versions_data, mocker):
         mocker.patch.object(update_versions, "get_debian_version", return_value="bookworm")
         self._mainline_matches_current(mocker, versions_data)

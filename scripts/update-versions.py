@@ -104,6 +104,11 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
             # Patch or RC update
             existing_bundle_version = versions_data[new_major_minor_release]["version"]
             existing_valkey_version = versions_data[new_major_minor_release]["valkey-server"]["version"]
+
+            if existing_valkey_version == new_version:
+                logging.info(f"Valkey {new_version} already current in Bundle version {new_major_minor_release}; skipping")
+                return versions_data
+
             versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
             versions_data[new_major_minor_release]["debian"]["version"] = get_debian_version(new_version)
 
@@ -194,6 +199,8 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                 current_major_minor = f"{current_major}.{current_minor}"
 
                 if current_major_minor == new_major_minor_release:
+                    if current_module_version == new_version:
+                        continue
                     versions_data[version_block]["modules"][module_key]["version"] = new_version
                     logging.info(f"Patch release: Updated {module_key} to {new_version} in Bundle version {version_block}")
 
@@ -203,8 +210,9 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                         bump_bundle_if_needed(versions_data, version_block)
         else:
             # For major or minor releases we will only update latest version entry
-            versions_data[latest]["modules"][module_key] = {"version": new_version}
-            module_updated = True
+            if versions_data[latest]["modules"].get(module_key, {}).get("version") != new_version:
+                versions_data[latest]["modules"][module_key] = {"version": new_version}
+                module_updated = True
 
         # Only bump the latest bundle if the module for the latest block actually changed.
         if module_updated:
