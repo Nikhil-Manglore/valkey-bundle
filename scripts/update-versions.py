@@ -109,6 +109,9 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                 logging.info(f"Valkey {new_version} already current in Bundle version {new_major_minor_release}; skipping")
                 return versions_data
 
+            # For backported valkey releases, always increment bundle version
+            mainline_bundle_version = get_mainline_bundle_version(new_major_minor_release)
+
             versions_data[new_major_minor_release]["valkey-server"]["version"] = new_version
             versions_data[new_major_minor_release]["debian"]["version"] = get_debian_version(new_version)
 
@@ -121,10 +124,8 @@ def update_versions(versions_data: Dict[str, Any], component_name: str, new_vers
                         stable_version = get_latest_module_release(repository, include_rc=False)
                         versions_data[new_major_minor_release]["modules"][name]["version"] = stable_version
 
-            mainline_bundle_version = get_mainline_bundle_version(new_major_minor_release)
             existing_bundle_rc = parse_version(existing_bundle_version)[3]
             already_bumped = mainline_bundle_version is not None and mainline_bundle_version != existing_bundle_version
-            # Let a GA event through when the bundle still carries an -rc suffix so the else branch can strip it, avoiding shipping GA contents under an -rc tag.
             if already_bumped and not (rc is None and existing_bundle_rc is not None):
                 logging.info(f"Valkey Bundle version {new_major_minor_release} already incremented from {mainline_bundle_version} to {existing_bundle_version}")
             elif new_major_minor_release != latest:
