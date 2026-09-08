@@ -165,6 +165,29 @@ class TestUpdateVersionsValkey:
         result = update_versions_fn(versions_data_rc, "valkey", "9.0.3")
         assert result["9.0"]["version"] == "9.0.1"
 
+    def test_ga_strips_rc_when_bundle_already_rc_bumped_in_pr(self, versions_data_rc, mocker):
+        """An open PR already bumped the bundle RC (differs from mainline),
+        then valkey GA releases into the SAME PR."""
+        mocker.patch.object(update_versions, "get_debian_version", return_value="bookworm")
+        # Current bundle is 9.0.1-rc2; mainline is 9.0.1-rc1 (already bumped in this PR).
+        self._mainline_bundle_lower_than_current(mocker, "9.0", "9.0.1-rc1")
+
+        result = update_versions_fn(versions_data_rc, "valkey", "9.0.3")
+        # GA event must strip the -rc suffix rather than being skipped as "already bumped".
+        assert result["9.0"]["version"] == "9.0.1"
+        assert result["9.0"]["valkey-server"]["version"] == "9.0.3"
+
+    def test_rc_bump_still_skipped_when_already_bumped_in_pr(self, versions_data_rc, mocker):
+        """The guard still holds for RC-into-RC: a second RC valkey event on a PR whose
+        bundle RC was already bumped must not double-bump."""
+        mocker.patch.object(update_versions, "get_debian_version", return_value="bookworm")
+        # Current bundle 9.0.1-rc2, mainline 9.0.1-rc1 (already bumped).
+        self._mainline_bundle_lower_than_current(mocker, "9.0", "9.0.1-rc1")
+
+        result = update_versions_fn(versions_data_rc, "valkey", "9.0.3-rc1")
+        # Not a GA event, so the guard skips — bundle stays at the already-bumped rc2.
+        assert result["9.0"]["version"] == "9.0.1-rc2"
+
     def test_new_major_minor_creates_entry(self, versions_data, mocker):
         mocker.patch.object(update_versions, "get_debian_version", return_value="trixie")
         mocker.patch.object(
